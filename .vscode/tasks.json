@@ -1,0 +1,255 @@
+{
+    "version": "2.0.0",
+    "inputs": [
+        {
+            "id": "configFile",
+            "type": "pickString",
+            "description": "Select network configuration",
+            "options": [
+                "small_network",
+                "medium_network",
+                "large_network",
+                "test_benchmark"
+            ],
+            "default": "small_network"
+        },
+        {
+            "id": "numThreads",
+            "type": "pickString",
+            "description": "Select number of OpenMP threads",
+            "options": [
+                "1",
+                "2",
+                "4",
+                "8"
+            ],
+            "default": "2"
+        },
+        {
+            "id": "numProcesses",
+            "type": "pickString",
+            "description": "Select number of MPI processes",
+            "options": [
+                "1",
+                "2",
+                "4",
+                "8"
+            ],
+            "default": "2"
+        }
+    ],
+    "tasks": [
+        {
+            "label": "Download MNIST Dataset",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/download_mnist.ps1"
+            ],
+            "detail": "Download and extract the MNIST handwritten digit dataset (4 files ~11MB) into data/mnist/raw/",
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Build All",
+            "type": "shell",
+            "command": "make",
+            "args": ["all"],
+            "detail": "Build all three training binaries: train_seq, train_omp, train_mpi",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Build Sequential",
+            "type": "shell",
+            "command": "make",
+            "args": ["seq"],
+            "detail": "Build the sequential (single-threaded) training binary: build/train_seq",
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Build OpenMP",
+            "type": "shell",
+            "command": "make",
+            "args": ["omp"],
+            "detail": "Build the OpenMP parallelized training binary: build/train_omp",
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Build MPI",
+            "type": "shell",
+            "command": "make",
+            "args": ["mpi"],
+            "detail": "Build the MPI distributed training binary: build/train_mpi",
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Clean Build",
+            "type": "shell",
+            "command": "make",
+            "args": ["clean"],
+            "detail": "Remove all compiled binaries and object files from build/",
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Build & Run Tests",
+            "type": "shell",
+            "command": "make",
+            "args": ["test"],
+            "detail": "Build and run all unit tests (dataset loading, loss functions, MLP forward/backward)",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Train Sequential",
+            "type": "shell",
+            "command": "./build/train_seq",
+            "args": [
+                "--config",
+                "configs/${input:configFile}.conf"
+            ],
+            "detail": "Train the MLP using the sequential (single-threaded) implementation",
+            "group": "none",
+            "dependsOn": "Build Sequential",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Train OpenMP",
+            "type": "shell",
+            "command": "./build/train_omp",
+            "args": [
+                "--config",
+                "configs/${input:configFile}.conf",
+                "--threads",
+                "${input:numThreads}"
+            ],
+            "detail": "Train the MLP using OpenMP shared-memory parallelization",
+            "group": "none",
+            "dependsOn": "Build OpenMP",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Train MPI",
+            "type": "shell",
+            "command": "mpiexec",
+            "args": [
+                "-np",
+                "${input:numProcesses}",
+                "./build/train_mpi",
+                "--config",
+                "configs/${input:configFile}.conf"
+            ],
+            "detail": "Train the MLP using MPI distributed parallelization across multiple processes",
+            "group": "none",
+            "dependsOn": "Build MPI",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Full Benchmark",
+            "type": "shell",
+            "command": "bash",
+            "args": ["scripts/benchmark.sh"],
+            "detail": "Run the complete benchmark suite across all configs (small/medium/large) and parallelism levels (1/2/4/8 threads/processes). Outputs a timestamped CSV to results/tables/",
+            "group": "none",
+            "dependsOn": "Build All",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Quick Test Benchmark",
+            "type": "shell",
+            "command": "bash",
+            "args": ["scripts/test_benchmark.sh"],
+            "detail": "Run a quick 1-epoch validation benchmark (sequential + OpenMP 2 threads + MPI 2 processes) to verify the benchmark infrastructure works",
+            "group": "none",
+            "dependsOn": "Build All",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Plot Results",
+            "type": "shell",
+            "command": "python",
+            "args": ["scripts/plot_results.py"],
+            "detail": "Generate ASCII summary tables and PNG speedup bar charts from the most recent benchmark CSV in results/tables/",
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}
