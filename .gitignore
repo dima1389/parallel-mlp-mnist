@@ -1,0 +1,27 @@
+# Build artifacts
+build/
+*.o
+*.d
+
+# Data files (download separately)
+data/mnist/raw/*.gz
+data/mnist/raw/train-*
+data/mnist/raw/t10k-*
+data/mnist/processed/
+
+# Results (generated)
+results/logs/*.log
+results/tables/*.csv
+results/plots/*.png
+results/plots/*.pdf
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
