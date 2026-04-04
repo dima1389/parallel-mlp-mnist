@@ -1,5 +1,5 @@
 // Sequential (single-threaded) MLP training on MNIST.
-// Implements online SGD: updates weights after every sample.
+// Implements mini-batch SGD: accumulates gradients over a batch, then updates.
 
 #include "dataset.h"
 #include "mlp.h"
@@ -77,35 +77,55 @@ int main(int argc, char* argv[]) {
 
     Timer epoch_timer, total_timer;
 
-    // --- Training loop: one pass over all training samples per epoch ---
+    // --- Training loop: mini-batch SGD ---
     timer_start(total_timer);
+
+    size_t N = train_images.num_samples;
+    size_t batch_size = static_cast<size_t>(cfg.batch_size);
 
     for (int epoch = 0; epoch < cfg.epochs; ++epoch) {
         timer_start(epoch_timer);
 
         double epoch_loss = 0.0;
 
-        // Process each training sample (online SGD)
-        for (size_t s = 0; s < train_images.num_samples; ++s) {
-            const double* img = train_images.images + s * train_images.image_size;
-            uint8_t label = train_labels.labels[s];
+        // Process training samples in mini-batches
+        for (size_t start = 0; start < N; start += batch_size) {
+            size_t end = std::min(start + batch_size, N);
+            size_t actual_batch = end - start;
 
-            // Forward pass: compute predictions
             mlp_zero_gradients(net);
-            const double* output = mlp_forward(net, img);
 
-            // Track running loss for this epoch
-            epoch_loss += cross_entropy_loss(output, label, num_classes);
+            for (size_t s = start; s < end; ++s) {
+                const double* img = train_images.images + s * train_images.image_size;
+                uint8_t label = train_labels.labels[s];
 
-            // Backward pass: compute gradients
-            mlp_backward(net, img, label);
+                // Forward pass: compute predictions
+                const double* output = mlp_forward(net, img);
 
-            // Online SGD: update weights immediately after each sample
+                // Track running loss for this epoch
+                epoch_loss += cross_entropy_loss(output, label, num_classes);
+
+                // Backward pass: accumulate gradients
+                mlp_backward(net, img, label);
+            }
+
+            // Average gradients over the mini-batch, then update weights
+            double inv_batch = 1.0 / static_cast<double>(actual_batch);
+            for (size_t l = 0; l < net.num_layers; ++l) {
+                Layer& layer = net.layers[l];
+                size_t w_size = layer.input_size * layer.output_size;
+                for (size_t j = 0; j < w_size; ++j) {
+                    layer.dW[j] *= inv_batch;
+                }
+                for (size_t j = 0; j < layer.output_size; ++j) {
+                    layer.db[j] *= inv_batch;
+                }
+            }
             mlp_update(net, cfg.learning_rate);
         }
 
         timer_stop(epoch_timer);
-        epoch_loss /= static_cast<double>(train_images.num_samples);
+        epoch_loss /= static_cast<double>(N);
 
         // Evaluate accuracy on the full test set
         for (size_t s = 0; s < test_images.num_samples; ++s) {

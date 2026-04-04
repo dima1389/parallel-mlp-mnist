@@ -93,7 +93,7 @@ int main(int argc, char* argv[]) {
 
     timer_start(total_timer);
 
-    size_t batch_size = static_cast<size_t>(num_threads);
+    size_t batch_size = static_cast<size_t>(cfg.batch_size);
 
     for (int epoch = 0; epoch < cfg.epochs; ++epoch) {
         timer_start(epoch_timer);
@@ -107,7 +107,7 @@ int main(int argc, char* argv[]) {
             size_t actual_batch = end - start;
 
             // Sync thread-local networks: copy current master weights, zero gradients
-            for (size_t t = 0; t < actual_batch; ++t) {
+            for (size_t t = 0; t < static_cast<size_t>(num_threads); ++t) {
                 MLP& tnet = thread_nets[t];
                 for (size_t l = 0; l < net.num_layers; ++l) {
                     size_t w_size = net.layers[l].input_size * net.layers[l].output_size;
@@ -138,7 +138,7 @@ int main(int argc, char* argv[]) {
 
             // Aggregate gradients from thread-local networks into master
             mlp_zero_gradients(net);
-            for (size_t t = 0; t < actual_batch; ++t) {
+            for (size_t t = 0; t < static_cast<size_t>(num_threads); ++t) {
                 mlp_accumulate_gradients(net, thread_nets[t]);
             }
 

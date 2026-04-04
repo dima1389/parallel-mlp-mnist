@@ -18,6 +18,7 @@ struct Layer {
     double* dW;         // Accumulated weight gradients [input_size x output_size]
     double* db;         // Accumulated bias gradients [output_size]
     double* delta;      // Error signal for backprop [output_size]
+    double* relu_d;     // Pre-allocated ReLU derivative buffer [output_size]
     size_t  input_size;
     size_t  output_size;
 };

@@ -73,14 +73,8 @@ int main(int argc, char* argv[]) {
                     train_images.num_samples, test_images.num_samples);
     }
 
-    // Partition training data: each rank gets a contiguous shard.
-    // Extra samples are distributed one-per-rank to the first 'remainder' ranks.
     size_t N = train_images.num_samples;
-    size_t base_chunk = N / static_cast<size_t>(world_size);
-    size_t remainder  = N % static_cast<size_t>(world_size);
-    size_t local_start = static_cast<size_t>(rank) * base_chunk +
-                         std::min(static_cast<size_t>(rank), remainder);
-    size_t local_count = base_chunk + (static_cast<size_t>(rank) < remainder ? 1 : 0);
+    size_t batch_size = static_cast<size_t>(cfg.batch_size);
 
     // Build network architecture
     std::vector<int> layer_sizes;
@@ -122,19 +116,32 @@ int main(int argc, char* argv[]) {
         double local_loss = 0.0;
 
         // --- Mini-batch parallel SGD across MPI ranks ---
-        // Each rank processes one sample per mini-batch step, then gradients
-        // are summed via Allreduce, averaged, and weights updated.
-        for (size_t s = local_start; s < local_start + local_count; ++s) {
+        // Process `batch_size` samples at a time, divided among ranks.
+        // Gradients are accumulated locally, then summed via one Allreduce per batch.
+        for (size_t batch_start = 0; batch_start < N; batch_start += batch_size) {
+            size_t batch_end = std::min(batch_start + batch_size, N);
+            size_t actual_batch = batch_end - batch_start;
+
+            // Divide the batch among ranks
+            size_t local_bs = actual_batch / static_cast<size_t>(world_size);
+            size_t local_rem = actual_batch % static_cast<size_t>(world_size);
+            size_t local_offset = batch_start +
+                static_cast<size_t>(rank) * local_bs +
+                std::min(static_cast<size_t>(rank), local_rem);
+            size_t local_count = local_bs + (static_cast<size_t>(rank) < local_rem ? 1 : 0);
+
+            // Each rank accumulates gradients over its local portion of the batch
             mlp_zero_gradients(net);
+            for (size_t s = local_offset; s < local_offset + local_count; ++s) {
+                const double* img = train_images.images + s * train_images.image_size;
+                uint8_t label = train_labels.labels[s];
 
-            const double* img = train_images.images + s * train_images.image_size;
-            uint8_t label = train_labels.labels[s];
+                const double* output = mlp_forward(net, img);
+                local_loss += cross_entropy_loss(output, label, num_classes);
+                mlp_backward(net, img, label);
+            }
 
-            const double* output = mlp_forward(net, img);
-            local_loss += cross_entropy_loss(output, label, num_classes);
-            mlp_backward(net, img, label);
-
-            // Pack gradients into flat buffer
+            // Pack accumulated gradients into flat buffer
             size_t offset = 0;
             for (size_t l = 0; l < net.num_layers; ++l) {
                 Layer& layer = net.layers[l];
@@ -145,22 +152,22 @@ int main(int argc, char* argv[]) {
                 offset += layer.output_size;
             }
 
-            // Allreduce: sum gradients across all ranks
+            // One Allreduce per mini-batch: sum gradients across all ranks
             MPI_Allreduce(local_grad, global_grad, static_cast<int>(total_params),
                            MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-            // Unpack, average over world_size, and apply SGD update
-            double inv_ws = 1.0 / static_cast<double>(world_size);
+            // Unpack, average over actual_batch size, and apply SGD update
+            double inv_batch = 1.0 / static_cast<double>(actual_batch);
             offset = 0;
             for (size_t l = 0; l < net.num_layers; ++l) {
                 Layer& layer = net.layers[l];
                 size_t w_size = layer.input_size * layer.output_size;
                 for (size_t j = 0; j < w_size; ++j) {
-                    layer.dW[j] = global_grad[offset + j] * inv_ws;
+                    layer.dW[j] = global_grad[offset + j] * inv_batch;
                 }
                 offset += w_size;
                 for (size_t j = 0; j < layer.output_size; ++j) {
-                    layer.db[j] = global_grad[offset + j] * inv_ws;
+                    layer.db[j] = global_grad[offset + j] * inv_batch;
                 }
                 offset += layer.output_size;
             }

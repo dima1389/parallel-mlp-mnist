@@ -29,6 +29,7 @@ MLP mlp_create(const std::vector<int>& layer_sizes) {
         l.dW      = alloc_matrix(l.input_size, l.output_size);  // Weight gradients
         l.db      = alloc_vector(l.output_size);                // Bias gradients
         l.delta   = alloc_vector(l.output_size);                // Error signal
+        l.relu_d  = alloc_vector(l.output_size);                // ReLU derivative buffer
 
         // Initialize weights with He initialization, biases to zero
         he_init(l.weights, l.input_size, l.output_size);
@@ -84,8 +85,7 @@ void mlp_backward(MLP& net, const double* input, uint8_t label) {
         Layer& next = net.layers[static_cast<size_t>(i) + 1];
 
         // delta_curr = (W_next^T * delta_next) element-wise-multiply relu'(z_curr)
-        double* relu_d = alloc_vector(curr.output_size);
-        relu_derivative(curr.z, relu_d, curr.output_size);
+        relu_derivative(curr.z, curr.relu_d, curr.output_size);
 
         for (size_t j = 0; j < curr.output_size; ++j) {
             // Sum the weighted error signals from the next layer
@@ -93,10 +93,8 @@ void mlp_backward(MLP& net, const double* input, uint8_t label) {
             for (size_t k = 0; k < next.output_size; ++k) {
                 sum += next.weights[j * next.output_size + k] * next.delta[k];
             }
-            curr.delta[j] = sum * relu_d[j];  // Gate by ReLU derivative
+            curr.delta[j] = sum * curr.relu_d[j];  // Gate by ReLU derivative
         }
-
-        free_matrix(relu_d);
     }
 
     // --- Step 3: Accumulate weight and bias gradients for each layer ---
@@ -164,6 +162,7 @@ void mlp_free(MLP& net) {
         free_matrix(l.dW);
         free_matrix(l.db);
         free_matrix(l.delta);
+        free_matrix(l.relu_d);
     }
     net.layers.clear();
     net.num_layers = 0;
