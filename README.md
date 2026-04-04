@@ -19,7 +19,6 @@ A C++ implementation of a Multi-Layer Perceptron (MLP) trained on the MNIST hand
    - [Step 7: Run Benchmarks](#step-7-run-benchmarks)
    - [Step 8: Visualize Results](#step-8-visualize-results)
 5. [VS Code Tasks Reference](#vs-code-tasks-reference)
-6. [Configuration File Format](#configuration-file-format)
 
 ---
 
@@ -101,16 +100,7 @@ parallel-mlp-mnist/
 
 ## Network Configurations
 
-Four predefined configurations are provided in `configs/`:
-
-| Config File | Hidden Layers | Architecture | ~Parameters | Epochs |
-| ------------- | --------------- | ------------- | ------------- | -------- |
-| `small_network.conf` | 128 | 784 → 128 → 10 | 101,770 | 10 |
-| `medium_network.conf` | 256, 128 | 784 → 256 → 128 → 10 | 234,890 | 10 |
-| `large_network.conf` | 512, 256, 128 | 784 → 512 → 256 → 128 → 10 | 467,338 | 10 |
-| `test_benchmark.conf` | 128 | 784 → 128 → 10 | 101,770 | 1 |
-
-All configurations use: `learning_rate=0.01`, `batch_size=1` (online SGD).
+Four predefined configurations are provided in `configs/` (small, medium, large, and a quick-test variant) with varying hidden layer depths and parameter counts. See [`configs/README.md`](configs/README.md) for the full configuration file format, key reference, and predefined configuration details.
 
 ---
 
@@ -134,12 +124,7 @@ powershell -ExecutionPolicy Bypass -File scripts/download_mnist.ps1
 bash scripts/download_mnist.sh
 ```
 
-**Expected output**: Four files in `data/mnist/raw/`:
-
-- `train-images-idx3-ubyte` — 60,000 training images (28×28 pixels)
-- `train-labels-idx1-ubyte` — 60,000 training labels (digits 0–9)
-- `t10k-images-idx3-ubyte` — 10,000 test images
-- `t10k-labels-idx1-ubyte` — 10,000 test labels
+**Expected output**: Four IDX binary files in `data/mnist/raw/`. See [`data/README.md`](data/README.md) for file details and format description.
 
 > **VS Code Task**: `Download MNIST Dataset`
 
@@ -181,19 +166,13 @@ make clean
 
 ### Step 3: Run Unit Tests
 
-**Purpose**: Verify that core components (MNIST loading, activation functions, loss computation, MLP forward/backward pass) work correctly before training.
+**Purpose**: Verify that core components work correctly before training.
 
 ```bash
 make test
 ```
 
-This builds and runs three test suites:
-
-- **test_dataset** — MNIST loading, pixel normalization to [0,1], label range [0–9]
-- **test_loss** — ReLU activation, softmax numerical stability, cross-entropy loss, gradient correctness
-- **test_mlp** — Network creation/destruction, forward pass output shape, backward pass, loss reduction over 50 steps
-
-**Expected output**: All tests pass with `PASS` messages. Any failure prints detailed error information.
+Builds and runs all test suites (dataset loading, activations & loss, MLP forward/backward). See [`tests/README.md`](tests/README.md) for per-file coverage details and how to add new tests.
 
 > **VS Code Task**: `Build & Run Tests`
 
@@ -240,8 +219,6 @@ Total training time: 23.456s
 - `--threads <N>` — Number of OpenMP threads (default: 2)
 - `--data <path>` — MNIST data directory (default: `data/mnist/raw`)
 
-**How it works**: Creates N thread-local network copies. For each mini-batch of N samples, all threads compute forward/backward passes in parallel, then gradients are aggregated and averaged before updating the master network.
-
 **Expected output**: Same format as sequential, but with faster per-epoch times as thread count increases.
 
 > **VS Code Task**: `Train OpenMP` — prompts you to select a configuration file and thread count (1, 2, 4, or 8).
@@ -261,8 +238,6 @@ mpiexec -np 4 ./build/train_mpi --config configs/small_network.conf
 - `-np <N>` — Number of MPI processes (mpiexec argument)
 - `--config <path>` — Network configuration file (required)
 - `--data <path>` — MNIST data directory (default: `data/mnist/raw`)
-
-**How it works**: The 60,000 training samples are partitioned across N ranks. Each rank computes gradients on its local partition. After each sample, `MPI_Allreduce` synchronizes gradients across all ranks, which are averaged and applied via SGD. All ranks maintain identical network weights.
 
 **Expected output**: Same format as sequential (only rank 0 prints output), with faster training as process count increases.
 
@@ -286,11 +261,7 @@ Runs all three network configurations (small, medium, large) with:
 bash scripts/benchmark.sh
 ```
 
-**Output**: Timestamped CSV at `results/tables/benchmark_YYYYMMDD_HHMMSS.csv` with columns:
-
-```text
-config,implementation,parallelism,epoch_time_sec
-```
+**Output**: Timestamped CSV in `results/tables/`. See [`results/README.md`](results/README.md) for the CSV schema and naming conventions.
 
 #### Quick Validation Benchmark
 
@@ -316,23 +287,7 @@ bash scripts/test_benchmark.sh
 python scripts/plot_results.py
 ```
 
-**Outputs**:
-
-1. **ASCII summary table** (printed to terminal) — per configuration, shows each implementation's wall-clock time and speedup relative to the sequential baseline.
-2. **PNG bar charts** (if matplotlib is installed) — saved to `results/plots/speedup_<config>.png`, one chart per network configuration showing speedup by implementation and parallelism level.
-
-**Sample terminal output**:
-
-```text
-=== small_network ===
-Implementation       Time [s]    Speedup
-sequential (1)       2.345       1.00x
-openmp (2)           1.234       1.90x
-openmp (4)           0.678       3.46x
-mpi (2)              1.456       1.61x
-mpi (4)              0.812       2.89x
-...
-```
+Prints ASCII summary tables to the terminal and generates PNG speedup bar charts (if matplotlib is installed) into `results/plots/`. See [`results/README.md`](results/README.md) for output file naming conventions.
 
 > **VS Code Task**: `Plot Results`
 
@@ -363,25 +318,3 @@ All toolchain actions are available as VS Code tasks. Run them via **Terminal �
 - **Configuration**: `small_network`, `medium_network`, `large_network`, or `test_benchmark`
 - **Thread count** (OpenMP only): 1, 2, 4, or 8
 - **Process count** (MPI only): 1, 2, 4, or 8
-
----
-
-## Configuration File Format
-
-Configuration files use a simple `key=value` format:
-
-```ini
-hidden_layers=256,128
-epochs=10
-learning_rate=0.01
-batch_size=1
-```
-
-| Key | Type | Description |
-| ----- | ------ | ------------- |
-| `hidden_layers` | Comma-separated integers | Sizes of hidden layers (e.g., `256,128` → two hidden layers) |
-| `epochs` | Integer | Number of full passes over the training dataset |
-| `learning_rate` | Float | SGD step size for weight updates |
-| `batch_size` | Integer | Number of samples per gradient update (1 = online SGD) |
-
-The input layer is always 784 (28×28 MNIST pixels, flattened) and the output layer is always 10 (digit classes 0–9).
