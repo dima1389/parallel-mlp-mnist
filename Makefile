@@ -74,7 +74,8 @@ TEST_SRC = $(wildcard tests/test_*.cpp)
 TEST_BIN = $(patsubst tests/%.cpp, $(BUILD_DIR)/%, $(TEST_SRC))
 
 test: $(TEST_BIN)
-	@for t in $(TEST_BIN); do echo "Running $$t ..."; $$t || exit 1; done
+	@mkdir -p results/logs
+	@for t in $(TEST_BIN); do echo "Running $$t ..."; $$t 2>&1 | tee results/logs/$$(basename $$t).log || exit 1; done
 
 $(BUILD_DIR)/test_%: tests/test_%.cpp $(COMMON_OBJ) | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)

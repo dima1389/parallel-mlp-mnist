@@ -1,11 +1,18 @@
 #include "utils.h"
 #include <cstdlib>
+#include <cstdarg>
 #include <cmath>
 #include <cstring>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
 #include <random>
+
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <sys/stat.h>
+#endif
 
 // Allocate a zero-initialized vector of doubles.
 double* alloc_vector(size_t size) {
@@ -93,4 +100,51 @@ Config load_config(const std::string& filepath) {
     }
 
     return cfg;
+}
+
+// --- Logging helpers ---
+
+FILE* g_log_fp = nullptr;
+
+// Create parent directories for a file path (cross-platform).
+static void make_parent_dirs(const std::string& filepath) {
+    size_t pos = 0;
+    while ((pos = filepath.find_first_of("/\\", pos + 1)) != std::string::npos) {
+        std::string dir = filepath.substr(0, pos);
+#ifdef _WIN32
+        _mkdir(dir.c_str());
+#else
+        mkdir(dir.c_str(), 0755);
+#endif
+    }
+}
+
+void open_log(const std::string& path) {
+    make_parent_dirs(path);
+    g_log_fp = std::fopen(path.c_str(), "w");
+    if (!g_log_fp) {
+        std::fprintf(stderr, "Warning: could not open log file: %s\n", path.c_str());
+    }
+}
+
+void close_log() {
+    if (g_log_fp) {
+        std::fclose(g_log_fp);
+        g_log_fp = nullptr;
+    }
+}
+
+void log_printf(const char* fmt, ...) {
+    va_list args;
+
+    va_start(args, fmt);
+    std::vprintf(fmt, args);
+    va_end(args);
+
+    if (g_log_fp) {
+        va_start(args, fmt);
+        std::vfprintf(g_log_fp, fmt, args);
+        va_end(args);
+        std::fflush(g_log_fp);
+    }
 }

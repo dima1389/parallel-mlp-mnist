@@ -14,20 +14,23 @@
 #include <vector>
 
 static void print_usage(const char* prog) {
-    std::fprintf(stderr, "Usage: %s --config <config_file> --data <mnist_dir>\n", prog);
+    std::fprintf(stderr, "Usage: %s --config <config_file> [--data <mnist_dir>] [--log <log_file>]\n", prog);
 }
 
 int main(int argc, char* argv[]) {
     std::string config_path;
     std::string data_dir = "data/mnist/raw";
+    std::string log_path;
 
-    // Parse command-line arguments: --config and --data
+    // Parse command-line arguments: --config, --data, --log
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--config" && i + 1 < argc) {
             config_path = argv[++i];
         } else if (arg == "--data" && i + 1 < argc) {
             data_dir = argv[++i];
+        } else if (arg == "--log" && i + 1 < argc) {
+            log_path = argv[++i];
         } else {
             print_usage(argv[0]);
             return 1;
@@ -42,22 +45,24 @@ int main(int argc, char* argv[]) {
     // Load training hyperparameters from config file
     Config cfg = load_config(config_path);
 
-    std::printf("=== Sequential MLP Training ===\n");
-    std::printf("Hidden layers: ");
+    if (!log_path.empty()) open_log(log_path);
+
+    log_printf("=== Sequential MLP Training ===\n");
+    log_printf("Hidden layers: ");
     for (size_t i = 0; i < cfg.hidden_layers.size(); ++i) {
-        std::printf("%d%s", cfg.hidden_layers[i],
+        log_printf("%d%s", cfg.hidden_layers[i],
                     (i < cfg.hidden_layers.size() - 1) ? ", " : "");
     }
-    std::printf("\nEpochs: %d, LR: %.4f\n\n", cfg.epochs, cfg.learning_rate);
+    log_printf("\nEpochs: %d, LR: %.4f\n\n", cfg.epochs, cfg.learning_rate);
 
     // Load MNIST training and test splits
-    std::printf("Loading MNIST data from %s ...\n", data_dir.c_str());
+    log_printf("Loading MNIST data from %s ...\n", data_dir.c_str());
     Dataset train_images = load_mnist_images(data_dir + "/train-images-idx3-ubyte");
     Dataset train_labels = load_mnist_labels(data_dir + "/train-labels-idx1-ubyte");
     Dataset test_images  = load_mnist_images(data_dir + "/t10k-images-idx3-ubyte");
     Dataset test_labels  = load_mnist_labels(data_dir + "/t10k-labels-idx1-ubyte");
 
-    std::printf("Train: %zu samples, Test: %zu samples, Image size: %zu\n",
+    log_printf("Train: %zu samples, Test: %zu samples, Image size: %zu\n",
                 train_images.num_samples, test_images.num_samples, train_images.image_size);
 
     // Build network architecture: [784, hidden1, ..., hiddenN, 10]
@@ -138,13 +143,15 @@ int main(int argc, char* argv[]) {
         double accuracy = compute_accuracy(test_preds, test_labels.labels,
                                            test_images.num_samples, num_classes);
 
-        std::printf("Epoch %2d/%d  Loss: %.4f  Accuracy: %.2f%%  Time: %.3f s\n",
+        log_printf("Epoch %2d/%d  Loss: %.4f  Accuracy: %.2f%%  Time: %.3f s\n",
                     epoch + 1, cfg.epochs, epoch_loss, accuracy * 100.0,
                     timer_elapsed_sec(epoch_timer));
     }
 
     timer_stop(total_timer);
-    std::printf("\nTotal training time: %.3f s\n", timer_elapsed_sec(total_timer));
+    log_printf("\nTotal training time: %.3f s\n", timer_elapsed_sec(total_timer));
+
+    close_log();
 
     // Cleanup all allocated memory
     free_matrix(test_preds);

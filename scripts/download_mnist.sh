@@ -4,6 +4,9 @@
 # Skips files that already exist to allow re-running safely.
 set -euo pipefail
 
+mkdir -p results/logs
+exec > >(tee "results/logs/download_mnist.log") 2>&1
+
 BASE_URL="https://yann.lecun.com/exdb/mnist"
 OUT_DIR="data/mnist/raw"
 

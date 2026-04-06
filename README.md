@@ -65,9 +65,9 @@ parallel-mlp-mnist/
 │   ├── mlp.h                   #   MLP network structure and operations
 │   ├── optimizer.h             #   SGD optimizer
 │   ├── timer.h                 #   Wall-clock timing utilities
-│   └── utils.h                 #   Config parsing, argument handling
+│   └── utils.h                 #   Config parsing, argument handling, logging
 ├── results/
-│   ├── logs/                   # Training logs
+│   ├── logs/                   # Task logs (build, test, training, benchmarks)
 │   ├── plots/                  # Generated PNG speedup charts
 │   └── tables/                 # Benchmark CSV files
 ├── scripts/
@@ -186,10 +186,10 @@ Builds and runs all test suites (dataset loading, activations & loss, MLP forwar
 ./build/train_seq --config configs/small_network.conf
 ```
 
-Replace `small_network.conf` with any config file from `configs/`. Optionally specify a custom data directory:
+Replace `small_network.conf` with any config file from `configs/`. Optionally specify a custom data directory or log file:
 
 ```bash
-./build/train_seq --config configs/medium_network.conf --data data/mnist/raw
+./build/train_seq --config configs/medium_network.conf --data data/mnist/raw --log results/logs/my_run.log
 ```
 
 **Expected output** (per epoch):
@@ -201,7 +201,7 @@ Epoch 2/10  Loss: 0.3218  Accuracy: 91.45%  Time: 2.301s
 Total training time: 23.456s
 ```
 
-> **VS Code Task**: `Train Sequential` — prompts you to select a configuration file.
+> **VS Code Task**: `Train Sequential` — prompts you to select a configuration file. Automatically generates a timestamped log in `results/logs/`.
 
 ---
 
@@ -218,10 +218,11 @@ Total training time: 23.456s
 - `--config <path>` — Network configuration file (required)
 - `--threads <N>` — Number of OpenMP threads (default: 2)
 - `--data <path>` — MNIST data directory (default: `data/mnist/raw`)
+- `--log <path>` — Log file path (optional; writes output to both stdout and file)
 
 **Expected output**: Same format as sequential, but with faster per-epoch times as thread count increases.
 
-> **VS Code Task**: `Train OpenMP` — prompts you to select a configuration file and thread count (1, 2, 4, or 8).
+> **VS Code Task**: `Train OpenMP` — prompts you to select a configuration file and thread count (1, 2, 4, or 8). Automatically generates a timestamped log in `results/logs/`.
 
 ---
 
@@ -238,10 +239,11 @@ mpiexec -np 4 ./build/train_mpi --config configs/small_network.conf
 - `-np <N>` — Number of MPI processes (mpiexec argument)
 - `--config <path>` — Network configuration file (required)
 - `--data <path>` — MNIST data directory (default: `data/mnist/raw`)
+- `--log <path>` — Log file path (optional; rank 0 writes output to both stdout and file)
 
 **Expected output**: Same format as sequential (only rank 0 prints output), with faster training as process count increases.
 
-> **VS Code Task**: `Train MPI` — prompts you to select a configuration file and process count (1, 2, 4, or 8).
+> **VS Code Task**: `Train MPI` — prompts you to select a configuration file and process count (1, 2, 4, or 8). Automatically generates a timestamped log in `results/logs/`.
 
 ---
 
@@ -261,7 +263,7 @@ Runs all three network configurations (small, medium, large) with:
 bash scripts/benchmark.sh
 ```
 
-**Output**: Timestamped CSV in `results/tables/`. See [`results/README.md`](results/README.md) for the CSV schema and naming conventions.
+**Output**: Timestamped CSV in `results/tables/` and per-run training logs in `results/logs/benchmark_<timestamp>/`. See [`results/README.md`](results/README.md) for the CSV schema, naming conventions, and log structure.
 
 #### Quick Validation Benchmark
 
@@ -271,7 +273,7 @@ Runs a fast 1-epoch test to verify the benchmark infrastructure:
 bash scripts/test_benchmark.sh
 ```
 
-**Output**: `results/tables/benchmark_test.csv` with results for sequential, OpenMP (2 threads), and MPI (2 processes).
+**Output**: `results/tables/benchmark_test.csv` with results for sequential, OpenMP (2 threads), and MPI (2 processes). Per-run logs in `results/logs/test_benchmark_<timestamp>/`.
 
 > **VS Code Tasks**: `Run Full Benchmark`, `Run Quick Test Benchmark`
 >
@@ -287,7 +289,7 @@ bash scripts/test_benchmark.sh
 python scripts/plot_results.py
 ```
 
-Prints ASCII summary tables to the terminal and generates PNG speedup bar charts (if matplotlib is installed) into `results/plots/`. See [`results/README.md`](results/README.md) for output file naming conventions.
+Prints ASCII summary tables to the terminal and generates PNG speedup bar charts (if matplotlib is installed) into `results/plots/`. Output is also logged to `results/logs/plot_results.log`. See [`results/README.md`](results/README.md) for output file naming conventions.
 
 > **VS Code Task**: `Plot Results`
 
@@ -297,21 +299,21 @@ Prints ASCII summary tables to the terminal and generates PNG speedup bar charts
 
 All toolchain actions are available as VS Code tasks. Run them via **Terminal → Run Task...** or the keyboard shortcut `Ctrl+Shift+P` → "Tasks: Run Task".
 
-| Task Label | Category | Description | Inputs |
-| ------------ | ---------- | ------------- | -------- |
-| **Download MNIST Dataset** | Data | Download and extract MNIST dataset into `data/mnist/raw/` | — |
-| **Build All** | Build | Compile all three training binaries (default build task) | — |
-| **Build Sequential** | Build | Compile `build/train_seq` only | — |
-| **Build OpenMP** | Build | Compile `build/train_omp` only | — |
-| **Build MPI** | Build | Compile `build/train_mpi` only | — |
-| **Clean Build** | Build | Remove all compiled binaries and object files | — |
-| **Build & Run Tests** | Test | Compile and execute all unit tests (default test task) | — |
-| **Train Sequential** | Train | Train MLP with sequential implementation (auto-builds first) | Config file |
-| **Train OpenMP** | Train | Train MLP with OpenMP parallelism (auto-builds first) | Config file, Thread count |
-| **Train MPI** | Train | Train MLP with MPI distribution (auto-builds first) | Config file, Process count |
-| **Run Full Benchmark** | Benchmark | Run complete benchmark suite across all configs and parallelism levels (auto-builds first) | — |
-| **Run Quick Test Benchmark** | Benchmark | Run 1-epoch validation benchmark (auto-builds first) | — |
-| **Plot Results** | Analysis | Generate summary tables and speedup charts from benchmark CSV | — |
+| Task Label | Category | Description | Inputs | Log Output |
+| ------------ | ---------- | ------------- | -------- | ------------ |
+| **Download MNIST Dataset** | Data | Download and extract MNIST dataset into `data/mnist/raw/` | — | `results/logs/download_mnist.log` |
+| **Build All** | Build | Compile all three training binaries (default build task) | — | `results/logs/build_all.log` |
+| **Build Sequential** | Build | Compile `build/train_seq` only | — | `results/logs/build_seq.log` |
+| **Build OpenMP** | Build | Compile `build/train_omp` only | — | `results/logs/build_omp.log` |
+| **Build MPI** | Build | Compile `build/train_mpi` only | — | `results/logs/build_mpi.log` |
+| **Clean Build** | Build | Remove all compiled binaries and object files | — | `results/logs/clean_build.log` |
+| **Build & Run Tests** | Test | Compile and execute all unit tests (default test task) | — | `results/logs/test_*.log` |
+| **Train Sequential** | Train | Train MLP with sequential implementation (auto-builds first) | Config file | `results/logs/train_seq_<config>_<ts>.log` |
+| **Train OpenMP** | Train | Train MLP with OpenMP parallelism (auto-builds first) | Config file, Thread count | `results/logs/train_omp_<config>_<threads>t_<ts>.log` |
+| **Train MPI** | Train | Train MLP with MPI distribution (auto-builds first) | Config file, Process count | `results/logs/train_mpi_<config>_<procs>p_<ts>.log` |
+| **Run Full Benchmark** | Benchmark | Run complete benchmark suite across all configs and parallelism levels (auto-builds first) | — | `results/logs/benchmark_<ts>/` |
+| **Run Quick Test Benchmark** | Benchmark | Run 1-epoch validation benchmark (auto-builds first) | — | `results/logs/test_benchmark_<ts>/` |
+| **Plot Results** | Analysis | Generate summary tables and speedup charts from benchmark CSV | — | `results/logs/plot_results.log` |
 
 **Input prompts**: When running Train tasks, VS Code will prompt you to select:
 

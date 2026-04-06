@@ -61,8 +61,8 @@
         {
             "label": "Build All",
             "type": "shell",
-            "command": "make",
-            "args": ["all"],
+            "command": "bash",
+            "args": ["-c", "mkdir -p results/logs && make all 2>&1 | tee results/logs/build_all.log"],
             "detail": "Build all three training binaries: train_seq, train_omp, train_mpi",
             "group": {
                 "kind": "build",
@@ -78,8 +78,8 @@
         {
             "label": "Build Sequential",
             "type": "shell",
-            "command": "make",
-            "args": ["seq"],
+            "command": "bash",
+            "args": ["-c", "mkdir -p results/logs && make seq 2>&1 | tee results/logs/build_seq.log"],
             "detail": "Build the sequential (single-threaded) training binary: build/train_seq",
             "group": "build",
             "presentation": {
@@ -92,8 +92,8 @@
         {
             "label": "Build OpenMP",
             "type": "shell",
-            "command": "make",
-            "args": ["omp"],
+            "command": "bash",
+            "args": ["-c", "mkdir -p results/logs && make omp 2>&1 | tee results/logs/build_omp.log"],
             "detail": "Build the OpenMP parallelized training binary: build/train_omp",
             "group": "build",
             "presentation": {
@@ -106,8 +106,8 @@
         {
             "label": "Build MPI",
             "type": "shell",
-            "command": "make",
-            "args": ["mpi"],
+            "command": "bash",
+            "args": ["-c", "mkdir -p results/logs && make mpi 2>&1 | tee results/logs/build_mpi.log"],
             "detail": "Build the MPI distributed training binary: build/train_mpi",
             "group": "build",
             "presentation": {
@@ -120,8 +120,8 @@
         {
             "label": "Clean Build",
             "type": "shell",
-            "command": "make",
-            "args": ["clean"],
+            "command": "bash",
+            "args": ["-c", "mkdir -p results/logs && make clean 2>&1 | tee results/logs/clean_build.log"],
             "detail": "Remove all compiled binaries and object files from build/",
             "group": "build",
             "presentation": {
@@ -151,10 +151,10 @@
         {
             "label": "Train Sequential",
             "type": "shell",
-            "command": "./build/train_seq",
+            "command": "bash",
             "args": [
-                "--config",
-                "configs/${input:configFile}.conf"
+                "-c",
+                "./build/train_seq --config configs/${input:configFile}.conf --log results/logs/train_seq_${input:configFile}_$(date +%Y%m%d_%H%M%S).log"
             ],
             "detail": "Train the MLP using the sequential (single-threaded) implementation",
             "group": "none",
@@ -169,12 +169,10 @@
         {
             "label": "Train OpenMP",
             "type": "shell",
-            "command": "./build/train_omp",
+            "command": "bash",
             "args": [
-                "--config",
-                "configs/${input:configFile}.conf",
-                "--threads",
-                "${input:numThreads}"
+                "-c",
+                "./build/train_omp --config configs/${input:configFile}.conf --threads ${input:numThreads} --log results/logs/train_omp_${input:configFile}_${input:numThreads}t_$(date +%Y%m%d_%H%M%S).log"
             ],
             "detail": "Train the MLP using OpenMP shared-memory parallelization",
             "group": "none",
@@ -189,13 +187,10 @@
         {
             "label": "Train MPI",
             "type": "shell",
-            "command": "mpiexec",
+            "command": "bash",
             "args": [
-                "-np",
-                "${input:numProcesses}",
-                "./build/train_mpi",
-                "--config",
-                "configs/${input:configFile}.conf"
+                "-c",
+                "mpiexec -np ${input:numProcesses} ./build/train_mpi --config configs/${input:configFile}.conf --log results/logs/train_mpi_${input:configFile}_${input:numProcesses}p_$(date +%Y%m%d_%H%M%S).log"
             ],
             "detail": "Train the MLP using MPI distributed parallelization across multiple processes",
             "group": "none",

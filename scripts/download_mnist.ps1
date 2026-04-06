@@ -3,6 +3,12 @@
 # Skips files that already exist.
 $ErrorActionPreference = "Stop"
 
+$LogDir = "results\logs"
+if (-not (Test-Path $LogDir)) {
+    New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+}
+Start-Transcript -Path "$LogDir\download_mnist.log" -Force
+
 $BaseUrl = "https://yann.lecun.com/exdb/mnist"
 $OutDir  = "data\mnist\raw"
 
@@ -43,3 +49,5 @@ foreach ($f in $Files) {
 }
 
 Write-Host "MNIST download complete."
+
+Stop-Transcript

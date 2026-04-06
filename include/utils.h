@@ -4,6 +4,7 @@
 // Utility functions: memory allocation, weight initialization, and config parsing.
 
 #include <cstddef>
+#include <cstdio>
 #include <string>
 #include <vector>
 #include <map>
@@ -32,5 +33,19 @@ struct Config {
 // Parse a config file with keys: hidden_layers, epochs, learning_rate, batch_size.
 // Lines starting with '#' are treated as comments.
 Config load_config(const std::string& filepath);
+
+// --- Logging helpers (dual stdout + file output) ---
+// Global log file pointer. When non-null, log_printf writes to both stdout and this file.
+extern FILE* g_log_fp;
+
+// Open a log file at the given path (creates parent directories if needed).
+// Subsequent log_printf calls will write to both stdout and this file.
+void open_log(const std::string& path);
+
+// Close the log file opened by open_log.
+void close_log();
+
+// Printf-style function that writes to stdout and, if a log file is open, also to the log file.
+void log_printf(const char* fmt, ...);
 
 #endif // UTILS_H

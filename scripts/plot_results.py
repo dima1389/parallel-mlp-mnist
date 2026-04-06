@@ -10,6 +10,26 @@ import os
 import sys
 from collections import defaultdict
 
+# --- Logging helper: write to both stdout and log file ---
+_log_fp = None
+
+def _open_log():
+    global _log_fp
+    os.makedirs('results/logs', exist_ok=True)
+    _log_fp = open('results/logs/plot_results.log', 'w')
+
+def _close_log():
+    global _log_fp
+    if _log_fp:
+        _log_fp.close()
+        _log_fp = None
+
+def log_print(msg=''):
+    print(msg)
+    if _log_fp:
+        _log_fp.write(msg + '\n')
+        _log_fp.flush()
+
 def load_csv(filepath):
     """Load benchmark CSV into a nested dict: {config: {impl_parallelism: time_sec}}."""
     data = defaultdict(dict)
@@ -31,12 +51,12 @@ def generate_text_table(data):
         if seq_time is None:
             continue
 
-        print(f"\n{'='*60}")
-        print(f"  Network: {config}")
-        print(f"{'='*60}")
-        print(f"  {'Implementation':<30} {'Time [s]':>10} {'Speedup':>10}")
-        print(f"  {'-'*50}")
-        print(f"  {'Sequential':<30} {seq_time:>10.3f} {1.0:>10.2f}")
+        log_print(f"\n{'='*60}")
+        log_print(f"  Network: {config}")
+        log_print(f"{'='*60}")
+        log_print(f"  {'Implementation':<30} {'Time [s]':>10} {'Speedup':>10}")
+        log_print(f"  {'-'*50}")
+        log_print(f"  {'Sequential':<30} {seq_time:>10.3f} {1.0:>10.2f}")
 
         for key, time_sec in sorted(results.items()):
             if key == 'sequential_1':
@@ -46,15 +66,15 @@ def generate_text_table(data):
             par = parts[1]
             speedup = seq_time / time_sec if time_sec > 0 else 0
             label = f"{impl} ({par} {'threads' if impl == 'OPENMP' else 'procs'})"
-            print(f"  {label:<30} {time_sec:>10.3f} {speedup:>10.2f}")
+            log_print(f"  {label:<30} {time_sec:>10.3f} {speedup:>10.2f}")
 
 def generate_plots(data, output_dir):
     """Generate per-config speedup bar charts (requires matplotlib)."""
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("matplotlib not installed — skipping plot generation.")
-        print("Install with: pip install matplotlib")
+        log_print("matplotlib not installed — skipping plot generation.")
+        log_print("Install with: pip install matplotlib")
         return
 
     os.makedirs(output_dir, exist_ok=True)
@@ -96,20 +116,23 @@ def generate_plots(data, output_dir):
         out_path = os.path.join(output_dir, f'speedup_{config}.png')
         plt.savefig(out_path, dpi=150)
         plt.close()
-        print(f"Saved: {out_path}")
+        log_print(f"Saved: {out_path}")
 
 if __name__ == '__main__':
     # Find the most recent benchmark CSV in results/tables/
     tables_dir = 'results/tables'
     csvs = [f for f in os.listdir(tables_dir) if f.endswith('.csv')]
     if not csvs:
-        print("No CSV files found in results/tables/")
+        log_print("No CSV files found in results/tables/")
         sys.exit(1)
 
     csv_path = os.path.join(tables_dir,
         max(csvs, key=lambda f: os.path.getmtime(os.path.join(tables_dir, f))))
-    print(f"Loading {csv_path}")
+
+    _open_log()
+    log_print(f"Loading {csv_path}")
 
     data = load_csv(csv_path)
     generate_text_table(data)
     generate_plots(data, 'results/plots')
+    _close_log()
