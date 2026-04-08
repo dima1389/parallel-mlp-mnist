@@ -6,12 +6,15 @@
 #   make seq      - Build sequential-only binary
 #   make omp      - Build OpenMP-parallelized binary
 #   make mpi      - Build MPI-parallelized binary
+#   make debug    - Build all three debug binaries (-g -O0)
+#   make debug-seq/debug-omp/debug-mpi - Build individual debug binary
 #   make test     - Build and run all unit tests
 #   make clean    - Remove all build artifacts
 
 CXX      = g++
 MPICXX   = mpicxx
 CXXFLAGS = -std=c++17 -O2 -Wall -Wextra -Iinclude
+DEBUG_CXXFLAGS = -std=c++17 -g -O0 -Wall -Wextra -Iinclude
 LDFLAGS  =
 
 SRC_DIR   = src
@@ -33,12 +36,22 @@ COMMON_OBJ     = $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%.o, $(COMMON_SRC))
 COMMON_OBJ_OMP = $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%_omp.o, $(COMMON_SRC))
 COMMON_OBJ_MPI = $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%_mpi.o, $(COMMON_SRC))
 
+# Debug object files (compiled with -g -O0)
+COMMON_OBJ_DBG     = $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%_dbg.o, $(COMMON_SRC))
+COMMON_OBJ_OMP_DBG = $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%_omp_dbg.o, $(COMMON_SRC))
+COMMON_OBJ_MPI_DBG = $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%_mpi_dbg.o, $(COMMON_SRC))
+
 # Output binaries
 SEQ_BIN = $(BUILD_DIR)/train_seq
 OMP_BIN = $(BUILD_DIR)/train_omp
 MPI_BIN = $(BUILD_DIR)/train_mpi
 
-.PHONY: all seq omp mpi test clean
+# Debug binaries
+SEQ_DBG_BIN = $(BUILD_DIR)/train_seq_dbg
+OMP_DBG_BIN = $(BUILD_DIR)/train_omp_dbg
+MPI_DBG_BIN = $(BUILD_DIR)/train_mpi_dbg
+
+.PHONY: all seq omp mpi debug debug-seq debug-omp debug-mpi test clean
 
 all: seq omp mpi
 
@@ -68,6 +81,33 @@ $(MPI_BIN): $(COMMON_OBJ_MPI) $(BUILD_DIR)/train_mpi_mpi.o
 
 $(BUILD_DIR)/%_mpi.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
 	$(MPICXX) $(CXXFLAGS) -c -o $@ $<
+
+# --- Debug builds (compiled with -g -O0 for GDB debugging) ---
+debug: debug-seq debug-omp debug-mpi
+
+debug-seq: $(SEQ_DBG_BIN)
+
+$(SEQ_DBG_BIN): $(COMMON_OBJ_DBG) $(BUILD_DIR)/train_sequential_dbg.o
+	$(CXX) $(DEBUG_CXXFLAGS) -o $@ $^ $(LDFLAGS)
+
+$(BUILD_DIR)/%_dbg.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
+	$(CXX) $(DEBUG_CXXFLAGS) -c -o $@ $<
+
+debug-omp: $(OMP_DBG_BIN)
+
+$(OMP_DBG_BIN): $(COMMON_OBJ_OMP_DBG) $(BUILD_DIR)/train_openmp_omp_dbg.o
+	$(CXX) $(DEBUG_CXXFLAGS) -fopenmp -o $@ $^ $(LDFLAGS)
+
+$(BUILD_DIR)/%_omp_dbg.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
+	$(CXX) $(DEBUG_CXXFLAGS) -fopenmp -c -o $@ $<
+
+debug-mpi: $(MPI_DBG_BIN)
+
+$(MPI_DBG_BIN): $(COMMON_OBJ_MPI_DBG) $(BUILD_DIR)/train_mpi_mpi_dbg.o
+	$(MPICXX) $(DEBUG_CXXFLAGS) -o $@ $^ $(LDFLAGS)
+
+$(BUILD_DIR)/%_mpi_dbg.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
+	$(MPICXX) $(DEBUG_CXXFLAGS) -c -o $@ $<
 
 # --- Tests (linked against sequential common objects) ---
 TEST_SRC = $(wildcard tests/test_*.cpp)

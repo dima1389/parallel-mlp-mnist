@@ -146,6 +146,48 @@
             "problemMatcher": []
         },
         {
+            "label": "Build Debug Sequential",
+            "type": "shell",
+            "command": "bash",
+            "args": ["-c", "mkdir -p results/logs && make debug-seq 2>&1 | tee results/logs/build_debug_seq.log"],
+            "detail": "Build the sequential training binary with debug symbols (-g -O0): build/train_seq_dbg",
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Build Debug OpenMP",
+            "type": "shell",
+            "command": "bash",
+            "args": ["-c", "mkdir -p results/logs && make debug-omp 2>&1 | tee results/logs/build_debug_omp.log"],
+            "detail": "Build the OpenMP training binary with debug symbols (-g -O0): build/train_omp_dbg",
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Build Debug MPI",
+            "type": "shell",
+            "command": "bash",
+            "args": ["-c", "mkdir -p results/logs && make debug-mpi 2>&1 | tee results/logs/build_debug_mpi.log"],
+            "detail": "Build the MPI training binary with debug symbols (-g -O0): build/train_mpi_dbg",
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
             "label": "Build & Run Tests",
             "type": "shell",
             "command": "make",
