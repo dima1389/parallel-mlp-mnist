@@ -119,17 +119,19 @@ def generate_plots(data, output_dir):
         log_print(f"Saved: {out_path}")
 
 if __name__ == '__main__':
+    _open_log()
+
     # Find the most recent benchmark CSV in results/tables/
     tables_dir = 'results/tables'
     csvs = [f for f in os.listdir(tables_dir) if f.endswith('.csv')]
     if not csvs:
         log_print("No CSV files found in results/tables/")
+        _close_log()
         sys.exit(1)
 
     csv_path = os.path.join(tables_dir,
         max(csvs, key=lambda f: os.path.getmtime(os.path.join(tables_dir, f))))
 
-    _open_log()
     log_print(f"Loading {csv_path}")
 
     data = load_csv(csv_path)

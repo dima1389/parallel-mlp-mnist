@@ -6,19 +6,23 @@ A C++ implementation of a Multi-Layer Perceptron (MLP) trained on the MNIST hand
 
 ## Table of Contents
 
-1. [Prerequisites](#prerequisites)
-2. [Project Structure](#project-structure)
-3. [Network Configurations](#network-configurations)
-4. [Step-by-Step Toolchain](#step-by-step-toolchain)
-   - [Step 1: Download the MNIST Dataset](#step-1-download-the-mnist-dataset)
-   - [Step 2: Build the Project](#step-2-build-the-project)
-   - [Step 3: Run Unit Tests](#step-3-run-unit-tests)
-   - [Step 4: Train — Sequential Baseline](#step-4-train--sequential-baseline)
-   - [Step 5: Train — OpenMP Parallelization](#step-5-train--openmp-parallelization)
-   - [Step 6: Train — MPI Distribution](#step-6-train--mpi-distribution)
-   - [Step 7: Run Benchmarks](#step-7-run-benchmarks)
-   - [Step 8: Visualize Results](#step-8-visualize-results)
-5. [VS Code Tasks Reference](#vs-code-tasks-reference)
+- [Parallel MLP Training on MNIST in C/C++ with OpenMP and MPI](#parallel-mlp-training-on-mnist-in-cc-with-openmp-and-mpi)
+  - [Table of Contents](#table-of-contents)
+  - [Prerequisites](#prerequisites)
+  - [Project Structure](#project-structure)
+  - [Network Configurations](#network-configurations)
+  - [Step-by-Step Toolchain](#step-by-step-toolchain)
+    - [Step 1: Download the MNIST Dataset](#step-1-download-the-mnist-dataset)
+    - [Step 2: Build the Project](#step-2-build-the-project)
+    - [Step 3: Run Unit Tests](#step-3-run-unit-tests)
+    - [Step 4: Train — Sequential Baseline](#step-4-train--sequential-baseline)
+    - [Step 5: Train — OpenMP Parallelization](#step-5-train--openmp-parallelization)
+    - [Step 6: Train — MPI Distribution](#step-6-train--mpi-distribution)
+    - [Step 7: Run Benchmarks](#step-7-run-benchmarks)
+      - [Full Benchmark Suite](#full-benchmark-suite)
+      - [Quick Validation Benchmark](#quick-validation-benchmark)
+    - [Step 8: Visualize Results](#step-8-visualize-results)
+  - [VS Code Tasks Reference](#vs-code-tasks-reference)
 
 ---
 
@@ -144,8 +148,8 @@ make all
 
 ```bash
 make seq    # Sequential binary → build/train_seq
-make omp    # OpenMP binary    → build/train_omp
-make mpi    # MPI binary       → build/train_mpi
+make omp    # OpenMP binary     → build/train_omp
+make mpi    # MPI binary        → build/train_mpi
 ```
 
 **Clean all build artifacts**:
