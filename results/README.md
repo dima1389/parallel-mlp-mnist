@@ -33,11 +33,21 @@ All tasks produce logs in `logs/`. Transient operations overwrite a fixed filena
 
 | Pattern | Source |
 |---------|--------|
-| `train_seq_<config>_<YYYYMMDD_HHMMSS>.log` | `Train Sequential` task |
-| `train_omp_<config>_<threads>t_<YYYYMMDD_HHMMSS>.log` | `Train OpenMP` task |
-| `train_mpi_<config>_<procs>p_<YYYYMMDD_HHMMSS>.log` | `Train MPI` task |
+| `train_seq_<config>_<YYYYMMDD_HHMMSS>/` | `Train Sequential` task (directory with per-run logs + CSV) |
+| `train_omp_<config>_<YYYYMMDD_HHMMSS>/` | `Train OpenMP` task (directory with per-run logs + CSV) |
+| `train_mpi_<config>_<YYYYMMDD_HHMMSS>/` | `Train MPI` task (directory with per-run logs + CSV) |
 | `benchmark_<YYYYMMDD_HHMMSS>/` | `Run Full Benchmark` task (directory) |
 | `test_benchmark_<YYYYMMDD_HHMMSS>/` | `Run Quick Test Benchmark` task (directory) |
+
+### Individual Training Log Directories
+
+Each individual training run (via `scripts/run_training.sh`) creates a timestamped subdirectory containing:
+
+| File | Contents |
+|------|----------|
+| `run<N>.log` | Training output for run N |
+
+A corresponding CSV is created in `tables/` (see [Naming Conventions](#naming-conventions)).
 
 ### Benchmark Log Directories
 
@@ -46,23 +56,27 @@ Each benchmark run creates a timestamped subdirectory containing:
 | File | Contents |
 |------|----------|
 | `master.log` | Script progress output (which configs/runs were executed) |
-| `seq_<config>.log` | Sequential training output for that config |
-| `omp_<config>_<threads>t.log` | OpenMP training output (per thread count) |
-| `mpi_<config>_<procs>p.log` | MPI training output (per process count) |
+| `seq_<config>_run<N>.log` | Sequential training output for that config, run N |
+| `omp_<config>_<threads>t_run<N>.log` | OpenMP training output (per thread count), run N |
+| `mpi_<config>_<procs>p_run<N>.log` | MPI training output (per process count), run N |
 
 ## CSV Schema
 
-Benchmark CSVs are produced by `scripts/benchmark.sh` and contain one row per (config, implementation, parallelism) combination.
+Benchmark and training CSVs contain one row per (config, implementation, parallelism, run) combination.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `config` | String | Network configuration name (e.g., `small_network`, `medium_network`, `large_network`) |
 | `implementation` | String | Training variant: `sequential`, `openmp`, or `mpi` |
 | `parallelism` | Integer | Number of threads (OpenMP) or processes (MPI); `1` for sequential |
+| `run` | Integer | Trial number (1-based); allows multiple runs per configuration |
 | `epoch_time_sec` | Float | Average wall-clock time per epoch in seconds |
+
+> **Backward compatibility**: Older CSVs without a `run` column are still supported by `scripts/plot_results.py` — each row is treated as a single run.
 
 ## Naming Conventions
 
 - **Benchmark CSVs**: `tables/benchmark_YYYYMMDD_HHMMSS.csv` — timestamped at the start of the benchmark run
+- **Training CSVs**: `tables/train_<impl>_<config>_YYYYMMDD_HHMMSS.csv` — produced by individual training tasks via `scripts/run_training.sh`
 - **Validation CSV**: `tables/benchmark_test.csv` — produced by the quick 1-epoch test benchmark
 - **Speedup charts**: `plots/speedup_<config>.png` — one chart per network configuration, showing speedup relative to the sequential baseline

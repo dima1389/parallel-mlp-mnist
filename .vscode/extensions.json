@@ -1,0 +1,11 @@
+{
+	"recommendations": [
+		"mechatroner.rainbow-csv",
+		"janisdd.vscode-edit-csv",
+		"ms-vscode.cpptools",
+		"ms-vscode.makefile-tools",
+		"ms-python.python",
+		"timonwong.shellcheck",
+		"ms-vscode.powershell"
+	]
+}

@@ -20,7 +20,11 @@
             "options": [
                 "1",
                 "2",
+                "3",
                 "4",
+                "5",
+                "6",
+                "7",
                 "8"
             ],
             "default": "2"
@@ -32,10 +36,20 @@
             "options": [
                 "1",
                 "2",
+                "3",
                 "4",
+                "5",
+                "6",
+                "7",
                 "8"
             ],
             "default": "2"
+        },
+        {
+            "id": "numRuns",
+            "type": "promptString",
+            "description": "Number of repeated runs per configuration",
+            "default": "1"
         }
     ],
     "tasks": [
@@ -154,9 +168,9 @@
             "command": "bash",
             "args": [
                 "-c",
-                "./build/train_seq --config configs/${input:configFile}.conf --log results/logs/train_seq_${input:configFile}_$(date +%Y%m%d_%H%M%S).log"
+                "NUM_RUNS=${input:numRuns} bash scripts/run_training.sh seq ${input:configFile}"
             ],
-            "detail": "Train the MLP using the sequential (single-threaded) implementation",
+            "detail": "Train the MLP using the sequential (single-threaded) implementation with N repeated runs",
             "group": "none",
             "dependsOn": "Build Sequential",
             "presentation": {
@@ -172,9 +186,9 @@
             "command": "bash",
             "args": [
                 "-c",
-                "./build/train_omp --config configs/${input:configFile}.conf --threads ${input:numThreads} --log results/logs/train_omp_${input:configFile}_${input:numThreads}t_$(date +%Y%m%d_%H%M%S).log"
+                "NUM_RUNS=${input:numRuns} bash scripts/run_training.sh omp ${input:configFile} ${input:numThreads}"
             ],
-            "detail": "Train the MLP using OpenMP shared-memory parallelization",
+            "detail": "Train the MLP using OpenMP shared-memory parallelization with N repeated runs",
             "group": "none",
             "dependsOn": "Build OpenMP",
             "presentation": {
@@ -190,9 +204,9 @@
             "command": "bash",
             "args": [
                 "-c",
-                "mpiexec -np ${input:numProcesses} ./build/train_mpi --config configs/${input:configFile}.conf --log results/logs/train_mpi_${input:configFile}_${input:numProcesses}p_$(date +%Y%m%d_%H%M%S).log"
+                "NUM_RUNS=${input:numRuns} bash scripts/run_training.sh mpi ${input:configFile} ${input:numProcesses}"
             ],
-            "detail": "Train the MLP using MPI distributed parallelization across multiple processes",
+            "detail": "Train the MLP using MPI distributed parallelization with N repeated runs",
             "group": "none",
             "dependsOn": "Build MPI",
             "presentation": {
@@ -206,8 +220,8 @@
             "label": "Run Full Benchmark",
             "type": "shell",
             "command": "bash",
-            "args": ["scripts/benchmark.sh"],
-            "detail": "Run the complete benchmark suite across all configs (small/medium/large) and parallelism levels (1/2/4/8 threads/processes). Outputs a timestamped CSV to results/tables/",
+            "args": ["-c", "NUM_RUNS=${input:numRuns} bash scripts/benchmark.sh"],
+            "detail": "Run the complete benchmark suite across all configs (small/medium/large) and parallelism levels (1\u20138 threads/processes) with N repeated runs. Outputs a timestamped CSV to results/tables/",
             "group": "none",
             "dependsOn": "Build All",
             "presentation": {

@@ -6,6 +6,7 @@ to the sequential baseline, and optionally generates bar charts with matplotlib.
 """
 
 import csv
+import math
 import os
 import sys
 from collections import defaultdict
@@ -31,8 +32,16 @@ def log_print(msg=''):
         _log_fp.flush()
 
 def load_csv(filepath):
-    """Load benchmark CSV into a nested dict: {config: {impl_parallelism: time_sec}}."""
-    data = defaultdict(dict)
+    """Load benchmark CSV, averaging over multiple runs.
+
+    Returns
+    -------
+    data : dict
+        {config: {impl_parallelism: mean_time_sec}}
+    stats : dict
+        {config: {impl_parallelism: {mean, stddev, min, max, n}}}
+    """
+    raw = defaultdict(lambda: defaultdict(list))
     with open(filepath, 'r') as f:
         reader = csv.DictReader(f)
         for row in reader:
@@ -41,22 +50,48 @@ def load_csv(filepath):
             par = int(row['parallelism'])
             time_sec = float(row['epoch_time_sec'])
             key = f"{impl}_{par}"
-            data[config][key] = time_sec
-    return data
+            raw[config][key].append(time_sec)
 
-def generate_text_table(data):
+    data = defaultdict(dict)
+    stats = defaultdict(dict)
+    for config, results in raw.items():
+        for key, times in results.items():
+            n = len(times)
+            mean = sum(times) / n
+            variance = sum((t - mean) ** 2 for t in times) / n if n > 1 else 0.0
+            stddev = math.sqrt(variance)
+            data[config][key] = mean
+            stats[config][key] = {
+                'mean': mean,
+                'stddev': stddev,
+                'min': min(times),
+                'max': max(times),
+                'n': n,
+            }
+    return data, stats
+
+def generate_text_table(data, stats):
     """Print a text summary table showing times and speedup vs sequential baseline."""
     for config, results in sorted(data.items()):
         seq_time = results.get('sequential_1', None)
         if seq_time is None:
             continue
 
-        log_print(f"\n{'='*60}")
+        cfg_stats = stats[config]
+        multi_run = any(s['n'] > 1 for s in cfg_stats.values())
+
+        log_print(f"\n{'='*70}")
         log_print(f"  Network: {config}")
-        log_print(f"{'='*60}")
-        log_print(f"  {'Implementation':<30} {'Time [s]':>10} {'Speedup':>10}")
-        log_print(f"  {'-'*50}")
-        log_print(f"  {'Sequential':<30} {seq_time:>10.3f} {1.0:>10.2f}")
+        log_print(f"{'='*70}")
+        if multi_run:
+            log_print(f"  {'Implementation':<30} {'Time [s]':>16} {'Speedup':>10} {'Runs':>6}")
+            log_print(f"  {'-'*62}")
+            seq_s = cfg_stats['sequential_1']
+            log_print(f"  {'Sequential':<30} {seq_time:>8.3f} \u00b1 {seq_s['stddev']:<5.3f} {1.0:>10.2f} {seq_s['n']:>5d}")
+        else:
+            log_print(f"  {'Implementation':<30} {'Time [s]':>10} {'Speedup':>10}")
+            log_print(f"  {'-'*50}")
+            log_print(f"  {'Sequential':<30} {seq_time:>10.3f} {1.0:>10.2f}")
 
         for key, time_sec in sorted(results.items()):
             if key == 'sequential_1':
@@ -66,9 +101,13 @@ def generate_text_table(data):
             par = parts[1]
             speedup = seq_time / time_sec if time_sec > 0 else 0
             label = f"{impl} ({par} {'threads' if impl == 'OPENMP' else 'procs'})"
-            log_print(f"  {label:<30} {time_sec:>10.3f} {speedup:>10.2f}")
+            if multi_run:
+                s = cfg_stats[key]
+                log_print(f"  {label:<30} {time_sec:>8.3f} \u00b1 {s['stddev']:<5.3f} {speedup:>10.2f} {s['n']:>5d}")
+            else:
+                log_print(f"  {label:<30} {time_sec:>10.3f} {speedup:>10.2f}")
 
-def generate_plots(data, output_dir):
+def generate_plots(data, stats, output_dir):
     """Generate per-config speedup bar charts (requires matplotlib)."""
     try:
         import matplotlib.pyplot as plt
@@ -84,11 +123,17 @@ def generate_plots(data, output_dir):
         if seq_time is None:
             continue
 
+        cfg_stats = stats[config]
+        seq_std = cfg_stats['sequential_1']['stddev']
+        multi_run = any(s['n'] > 1 for s in cfg_stats.values())
+
         labels = []
         speedups = []
+        speedup_errs = []
 
         labels.append('Sequential')
         speedups.append(1.0)
+        speedup_errs.append(0.0)
 
         for key in sorted(results.keys()):
             if key == 'sequential_1':
@@ -96,16 +141,33 @@ def generate_plots(data, output_dir):
             parts = key.split('_')
             impl = parts[0].upper()
             par = parts[1]
-            speedup = seq_time / results[key] if results[key] > 0 else 0
+            t_mean = results[key]
+            t_std = cfg_stats[key]['stddev']
+            speedup = seq_time / t_mean if t_mean > 0 else 0
+            # Error propagation: S = T_seq / T, dS = S * sqrt((dT_seq/T_seq)^2 + (dT/T)^2)
+            if multi_run and t_mean > 0 and seq_time > 0:
+                rel_seq = (seq_std / seq_time) ** 2
+                rel_t = (t_std / t_mean) ** 2
+                sp_err = speedup * math.sqrt(rel_seq + rel_t)
+            else:
+                sp_err = 0.0
             labels.append(f"{impl}\n({par})")
             speedups.append(speedup)
+            speedup_errs.append(sp_err)
 
         fig, ax = plt.subplots(figsize=(10, 5))
-        bars = ax.bar(labels, speedups, color=['#2196F3' if 'OMP' in l else
-                                                '#4CAF50' if 'MPI' in l else
-                                                '#9E9E9E' for l in labels])
+        bars = ax.bar(labels, speedups,
+                      yerr=speedup_errs if multi_run else None,
+                      capsize=4 if multi_run else 0,
+                      color=['#2196F3' if 'OMP' in l else
+                             '#4CAF50' if 'MPI' in l else
+                             '#9E9E9E' for l in labels])
         ax.set_ylabel('Speedup')
-        ax.set_title(f'Speedup — {config}')
+        title = f'Speedup — {config}'
+        if multi_run:
+            n = cfg_stats['sequential_1']['n']
+            title += f'  (avg of {n} runs)'
+        ax.set_title(title)
         ax.axhline(y=1.0, color='gray', linestyle='--', alpha=0.5)
 
         for bar, s in zip(bars, speedups):
@@ -134,7 +196,7 @@ if __name__ == '__main__':
 
     log_print(f"Loading {csv_path}")
 
-    data = load_csv(csv_path)
-    generate_text_table(data)
-    generate_plots(data, 'results/plots')
+    data, stats = load_csv(csv_path)
+    generate_text_table(data, stats)
+    generate_plots(data, stats, 'results/plots')
     _close_log()

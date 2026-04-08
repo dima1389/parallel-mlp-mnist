@@ -10,8 +10,9 @@ set -euo pipefail
 DATA_DIR="data/mnist/raw"
 RESULTS_DIR="results/tables"
 CONFIGS=("configs/small_network.conf" "configs/medium_network.conf" "configs/large_network.conf")
-OMP_THREADS=(1 2 4 8)
-MPI_PROCS=(1 2 4 8)
+OMP_THREADS=(1 2 3 4 5 6 7 8)
+MPI_PROCS=(1 2 3 4 5 6 7 8)
+NUM_RUNS="${NUM_RUNS:-1}"
 
 mkdir -p "$RESULTS_DIR"
 
@@ -26,32 +27,34 @@ mkdir -p "$LOG_DIR"
 exec > >(tee "$LOG_DIR/master.log") 2>&1
 
 # CSV header
-echo "config,implementation,parallelism,epoch_time_sec" > "$CSV"
+echo "config,implementation,parallelism,run,epoch_time_sec" > "$CSV"
 
 for cfg in "${CONFIGS[@]}"; do
     cfg_name=$(basename "$cfg" .conf)
-    echo "=== Benchmarking $cfg_name ==="
+    echo "=== Benchmarking $cfg_name ($NUM_RUNS run(s)) ==="
 
-    # --- Sequential baseline ---
-    echo "  Sequential..."
-    ./build/train_seq --config "$cfg" --data "$DATA_DIR" --log "$LOG_DIR/seq_${cfg_name}.log" > "$TMP" 2>&1
-    epoch_time=$(grep "Epoch" "$TMP" | tail -1 | grep -oP 'Time:\s+\K[0-9.]+')
-    echo "$cfg_name,sequential,1,$epoch_time" >> "$CSV"
-
-    # --- OpenMP with varying thread counts ---
-    for t in "${OMP_THREADS[@]}"; do
-        echo "  OpenMP ($t threads)..."
-        ./build/train_omp --config "$cfg" --data "$DATA_DIR" --threads "$t" --log "$LOG_DIR/omp_${cfg_name}_${t}t.log" > "$TMP" 2>&1
+    for run in $(seq 1 "$NUM_RUNS"); do
+        # --- Sequential baseline ---
+        echo "  Sequential (run $run/$NUM_RUNS)..."
+        ./build/train_seq --config "$cfg" --data "$DATA_DIR" --log "$LOG_DIR/seq_${cfg_name}_run${run}.log" > "$TMP" 2>&1
         epoch_time=$(grep "Epoch" "$TMP" | tail -1 | grep -oP 'Time:\s+\K[0-9.]+')
-        echo "$cfg_name,openmp,$t,$epoch_time" >> "$CSV"
-    done
+        echo "$cfg_name,sequential,1,$run,$epoch_time" >> "$CSV"
 
-    # --- MPI with varying process counts ---
-    for np in "${MPI_PROCS[@]}"; do
-        echo "  MPI ($np procs)..."
-        mpiexec -np "$np" ./build/train_mpi --config "$cfg" --data "$DATA_DIR" --log "$LOG_DIR/mpi_${cfg_name}_${np}p.log" > "$TMP" 2>&1
-        epoch_time=$(grep "Epoch" "$TMP" | tail -1 | grep -oP 'Time:\s+\K[0-9.]+')
-        echo "$cfg_name,mpi,$np,$epoch_time" >> "$CSV"
+        # --- OpenMP with varying thread counts ---
+        for t in "${OMP_THREADS[@]}"; do
+            echo "  OpenMP ($t threads, run $run/$NUM_RUNS)..."
+            ./build/train_omp --config "$cfg" --data "$DATA_DIR" --threads "$t" --log "$LOG_DIR/omp_${cfg_name}_${t}t_run${run}.log" > "$TMP" 2>&1
+            epoch_time=$(grep "Epoch" "$TMP" | tail -1 | grep -oP 'Time:\s+\K[0-9.]+')
+            echo "$cfg_name,openmp,$t,$run,$epoch_time" >> "$CSV"
+        done
+
+        # --- MPI with varying process counts ---
+        for np in "${MPI_PROCS[@]}"; do
+            echo "  MPI ($np procs, run $run/$NUM_RUNS)..."
+            mpiexec -np "$np" ./build/train_mpi --config "$cfg" --data "$DATA_DIR" --log "$LOG_DIR/mpi_${cfg_name}_${np}p_run${run}.log" > "$TMP" 2>&1
+            epoch_time=$(grep "Epoch" "$TMP" | tail -1 | grep -oP 'Time:\s+\K[0-9.]+')
+            echo "$cfg_name,mpi,$np,$run,$epoch_time" >> "$CSV"
+        done
     done
 done
 

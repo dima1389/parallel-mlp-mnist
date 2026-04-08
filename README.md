@@ -205,7 +205,7 @@ Epoch 2/10  Loss: 0.3218  Accuracy: 91.45%  Time: 2.301s
 Total training time: 23.456s
 ```
 
-> **VS Code Task**: `Train Sequential` — prompts you to select a configuration file. Automatically generates a timestamped log in `results/logs/`.
+> **VS Code Task**: `Train Sequential` — prompts you to select a configuration file and number of runs. Produces a timestamped CSV in `results/tables/` and per-run logs in `results/logs/`.
 
 ---
 
@@ -226,7 +226,7 @@ Total training time: 23.456s
 
 **Expected output**: Same format as sequential, but with faster per-epoch times as thread count increases.
 
-> **VS Code Task**: `Train OpenMP` — prompts you to select a configuration file and thread count (1, 2, 4, or 8). Automatically generates a timestamped log in `results/logs/`.
+> **VS Code Task**: `Train OpenMP` — prompts you to select a configuration file, thread count (1–8), and number of runs. Produces a timestamped CSV in `results/tables/` and per-run logs in `results/logs/`.
 
 ---
 
@@ -247,7 +247,7 @@ mpiexec -np 4 ./build/train_mpi --config configs/small_network.conf
 
 **Expected output**: Same format as sequential (only rank 0 prints output), with faster training as process count increases.
 
-> **VS Code Task**: `Train MPI` — prompts you to select a configuration file and process count (1, 2, 4, or 8). Automatically generates a timestamped log in `results/logs/`.
+> **VS Code Task**: `Train MPI` — prompts you to select a configuration file, process count (1–8), and number of runs. Produces a timestamped CSV in `results/tables/` and per-run logs in `results/logs/`.
 
 ---
 
@@ -260,11 +260,12 @@ mpiexec -np 4 ./build/train_mpi --config configs/small_network.conf
 Runs all three network configurations (small, medium, large) with:
 
 - Sequential: 1 run
-- OpenMP: 1, 2, 4, 8 threads
-- MPI: 1, 2, 4, 8 processes
+- OpenMP: 1–8 threads
+- MPI: 1–8 processes
 
 ```bash
-bash scripts/benchmark.sh
+bash scripts/benchmark.sh                    # single run (default)
+NUM_RUNS=5 bash scripts/benchmark.sh         # 5 repeated runs per configuration
 ```
 
 **Output**: Timestamped CSV in `results/tables/` and per-run training logs in `results/logs/benchmark_<timestamp>/`. See [`results/README.md`](results/README.md) for the CSV schema, naming conventions, and log structure.
@@ -274,7 +275,8 @@ bash scripts/benchmark.sh
 Runs a fast 1-epoch test to verify the benchmark infrastructure:
 
 ```bash
-bash scripts/test_benchmark.sh
+bash scripts/test_benchmark.sh               # single run (default)
+NUM_RUNS=3 bash scripts/test_benchmark.sh    # 3 repeated runs
 ```
 
 **Output**: `results/tables/benchmark_test.csv` with results for sequential, OpenMP (2 threads), and MPI (2 processes). Per-run logs in `results/logs/test_benchmark_<timestamp>/`.
@@ -293,7 +295,7 @@ bash scripts/test_benchmark.sh
 python scripts/plot_results.py
 ```
 
-Prints ASCII summary tables to the terminal and generates PNG speedup bar charts (if matplotlib is installed) into `results/plots/`. Output is also logged to `results/logs/plot_results.log`. See [`results/README.md`](results/README.md) for output file naming conventions.
+Prints ASCII summary tables to the terminal and generates PNG speedup bar charts (if matplotlib is installed) into `results/plots/`. Output is also logged to `results/logs/plot_results.log`. When the CSV contains multiple runs, summary tables display mean ± stddev with run counts, and speedup charts include error bars. See [`results/README.md`](results/README.md) for output file naming conventions.
 
 > **VS Code Task**: `Plot Results`
 
@@ -312,15 +314,16 @@ All toolchain actions are available as VS Code tasks. Run them via **Terminal �
 | **Build MPI** | Build | Compile `build/train_mpi` only | — | `results/logs/build_mpi.log` |
 | **Clean Build** | Build | Remove all compiled binaries and object files | — | `results/logs/clean_build.log` |
 | **Build & Run Tests** | Test | Compile and execute all unit tests (default test task) | — | `results/logs/test_*.log` |
-| **Train Sequential** | Train | Train MLP with sequential implementation (auto-builds first) | Config file | `results/logs/train_seq_<config>_<ts>.log` |
-| **Train OpenMP** | Train | Train MLP with OpenMP parallelism (auto-builds first) | Config file, Thread count | `results/logs/train_omp_<config>_<threads>t_<ts>.log` |
-| **Train MPI** | Train | Train MLP with MPI distribution (auto-builds first) | Config file, Process count | `results/logs/train_mpi_<config>_<procs>p_<ts>.log` |
-| **Run Full Benchmark** | Benchmark | Run complete benchmark suite across all configs and parallelism levels (auto-builds first) | — | `results/logs/benchmark_<ts>/` |
+| **Train Sequential** | Train | Train MLP with sequential implementation (auto-builds first) | Config file, Number of runs | `results/logs/train_seq_<config>_<ts>/` |
+| **Train OpenMP** | Train | Train MLP with OpenMP parallelism (auto-builds first) | Config file, Thread count, Number of runs | `results/logs/train_omp_<config>_<ts>/` |
+| **Train MPI** | Train | Train MLP with MPI distribution (auto-builds first) | Config file, Process count, Number of runs | `results/logs/train_mpi_<config>_<ts>/` |
+| **Run Full Benchmark** | Benchmark | Run complete benchmark suite across all configs and parallelism levels with N repeated runs (auto-builds first) | Number of runs | `results/logs/benchmark_<ts>/` |
 | **Run Quick Test Benchmark** | Benchmark | Run 1-epoch validation benchmark (auto-builds first) | — | `results/logs/test_benchmark_<ts>/` |
 | **Plot Results** | Analysis | Generate summary tables and speedup charts from benchmark CSV | — | `results/logs/plot_results.log` |
 
-**Input prompts**: When running Train tasks, VS Code will prompt you to select:
+**Input prompts**: When running Train or Benchmark tasks, VS Code will prompt you to select:
 
-- **Configuration**: `small_network`, `medium_network`, `large_network`, or `test_benchmark`
-- **Thread count** (OpenMP only): 1, 2, 4, or 8
-- **Process count** (MPI only): 1, 2, 4, or 8
+- **Configuration** (Train tasks): `small_network`, `medium_network`, `large_network`, or `test_benchmark`
+- **Thread count** (OpenMP only): 1–8
+- **Process count** (MPI only): 1–8
+- **Number of runs** (all Train + Full Benchmark tasks): How many times to repeat the training (default: 1)
