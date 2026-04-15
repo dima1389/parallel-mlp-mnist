@@ -37,29 +37,34 @@ def load_csv(filepath):
     Returns
     -------
     data : dict
-        {config: {impl_parallelism: mean_time_sec}}
+        {config: {impl_parallelism: mean_total_time_sec}}
     stats : dict
-        {config: {impl_parallelism: {mean, stddev, min, max, n}}}
+        {config: {impl_parallelism: {mean, stddev, min, max, n, accuracy}}}
     """
-    raw = defaultdict(lambda: defaultdict(list))
+    raw_time = defaultdict(lambda: defaultdict(list))
+    raw_acc  = defaultdict(lambda: defaultdict(list))
     with open(filepath, 'r') as f:
         reader = csv.DictReader(f)
         for row in reader:
             config = row['config']
             impl = row['implementation']
             par = int(row['parallelism'])
-            time_sec = float(row['epoch_time_sec'])
             key = f"{impl}_{par}"
-            raw[config][key].append(time_sec)
+            time_sec = float(row['total_time_sec'])
+            raw_time[config][key].append(time_sec)
+            accuracy = float(row.get('final_accuracy', 0))
+            raw_acc[config][key].append(accuracy)
 
     data = defaultdict(dict)
     stats = defaultdict(dict)
-    for config, results in raw.items():
+    for config, results in raw_time.items():
         for key, times in results.items():
             n = len(times)
             mean = sum(times) / n
             variance = sum((t - mean) ** 2 for t in times) / n if n > 1 else 0.0
             stddev = math.sqrt(variance)
+            accs = raw_acc[config][key]
+            mean_acc = sum(accs) / len(accs) if accs else 0.0
             data[config][key] = mean
             stats[config][key] = {
                 'mean': mean,
@@ -67,11 +72,12 @@ def load_csv(filepath):
                 'min': min(times),
                 'max': max(times),
                 'n': n,
+                'accuracy': mean_acc,
             }
     return data, stats
 
 def generate_text_table(data, stats):
-    """Print a text summary table showing times and speedup vs sequential baseline."""
+    """Print a text summary table showing times, accuracy, and speedup vs sequential baseline."""
     for config, results in sorted(data.items()):
         seq_time = results.get('sequential_1', None)
         if seq_time is None:
@@ -80,18 +86,19 @@ def generate_text_table(data, stats):
         cfg_stats = stats[config]
         multi_run = any(s['n'] > 1 for s in cfg_stats.values())
 
-        log_print(f"\n{'='*70}")
+        log_print(f"\n{'='*80}")
         log_print(f"  Network: {config}")
-        log_print(f"{'='*70}")
+        log_print(f"{'='*80}")
         if multi_run:
-            log_print(f"  {'Implementation':<30} {'Time [s]':>16} {'Speedup':>10} {'Runs':>6}")
-            log_print(f"  {'-'*62}")
+            log_print(f"  {'Implementation':<30} {'Time [s]':>16} {'Accuracy':>10} {'Speedup':>10} {'Runs':>6}")
+            log_print(f"  {'-'*72}")
             seq_s = cfg_stats['sequential_1']
-            log_print(f"  {'Sequential':<30} {seq_time:>8.3f} \u00b1 {seq_s['stddev']:<5.3f} {1.0:>10.2f} {seq_s['n']:>5d}")
+            log_print(f"  {'Sequential':<30} {seq_time:>8.3f} \u00b1 {seq_s['stddev']:<5.3f} {seq_s['accuracy']*100:>9.2f}% {1.0:>10.2f} {seq_s['n']:>5d}")
         else:
-            log_print(f"  {'Implementation':<30} {'Time [s]':>10} {'Speedup':>10}")
-            log_print(f"  {'-'*50}")
-            log_print(f"  {'Sequential':<30} {seq_time:>10.3f} {1.0:>10.2f}")
+            log_print(f"  {'Implementation':<30} {'Time [s]':>10} {'Accuracy':>10} {'Speedup':>10}")
+            log_print(f"  {'-'*60}")
+            seq_s = cfg_stats['sequential_1']
+            log_print(f"  {'Sequential':<30} {seq_time:>10.3f} {seq_s['accuracy']*100:>9.2f}% {1.0:>10.2f}")
 
         for key, time_sec in sorted(results.items()):
             if key == 'sequential_1':
@@ -100,12 +107,12 @@ def generate_text_table(data, stats):
             impl = parts[0].upper()
             par = parts[1]
             speedup = seq_time / time_sec if time_sec > 0 else 0
+            s = cfg_stats[key]
             label = f"{impl} ({par} {'threads' if impl == 'OPENMP' else 'procs'})"
             if multi_run:
-                s = cfg_stats[key]
-                log_print(f"  {label:<30} {time_sec:>8.3f} \u00b1 {s['stddev']:<5.3f} {speedup:>10.2f} {s['n']:>5d}")
+                log_print(f"  {label:<30} {time_sec:>8.3f} \u00b1 {s['stddev']:<5.3f} {s['accuracy']*100:>9.2f}% {speedup:>10.2f} {s['n']:>5d}")
             else:
-                log_print(f"  {label:<30} {time_sec:>10.3f} {speedup:>10.2f}")
+                log_print(f"  {label:<30} {time_sec:>10.3f} {s['accuracy']*100:>9.2f}% {speedup:>10.2f}")
 
 def generate_plots(data, stats, output_dir):
     """Generate per-config speedup bar charts (requires matplotlib)."""

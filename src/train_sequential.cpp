@@ -14,15 +14,16 @@
 #include <vector>
 
 static void print_usage(const char* prog) {
-    std::fprintf(stderr, "Usage: %s --config <config_file> [--data <mnist_dir>] [--log <log_file>]\n", prog);
+    std::fprintf(stderr, "Usage: %s --config <config_file> [--data <mnist_dir>] [--log <log_file>] [--epoch-csv <csv_file>]\n", prog);
 }
 
 int main(int argc, char* argv[]) {
     std::string config_path;
     std::string data_dir = "data/mnist/raw";
     std::string log_path;
+    std::string epoch_csv_path;
 
-    // Parse command-line arguments: --config, --data, --log
+    // Parse command-line arguments: --config, --data, --log, --epoch-csv
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--config" && i + 1 < argc) {
@@ -31,6 +32,8 @@ int main(int argc, char* argv[]) {
             data_dir = argv[++i];
         } else if (arg == "--log" && i + 1 < argc) {
             log_path = argv[++i];
+        } else if (arg == "--epoch-csv" && i + 1 < argc) {
+            epoch_csv_path = argv[++i];
         } else {
             print_usage(argv[0]);
             return 1;
@@ -75,12 +78,15 @@ int main(int argc, char* argv[]) {
 
     // Initialize the MLP with He-initialized weights
     MLP net = mlp_create(layer_sizes);
+    size_t total_params = mlp_total_params(net);
 
     // Buffer to store predictions for test set accuracy evaluation
     size_t num_classes = 10;
     double* test_preds = alloc_matrix(test_images.num_samples, num_classes);
 
     Timer epoch_timer, total_timer;
+    std::vector<EpochRecord> epoch_records;
+    double cumulative_time = 0.0;
 
     // --- Training loop: mini-batch SGD ---
     timer_start(total_timer);
@@ -146,10 +152,18 @@ int main(int argc, char* argv[]) {
         log_printf("Epoch %2d/%d  Loss: %.4f  Accuracy: %.2f%%  Time: %.3f s\n",
                     epoch + 1, cfg.epochs, epoch_loss, accuracy * 100.0,
                     timer_elapsed_sec(epoch_timer));
+
+        cumulative_time += timer_elapsed_sec(epoch_timer);
+        epoch_records.push_back({epoch + 1, epoch_loss, accuracy,
+                                 timer_elapsed_sec(epoch_timer), cumulative_time});
     }
 
     timer_stop(total_timer);
-    log_printf("\nTotal training time: %.3f s\n", timer_elapsed_sec(total_timer));
+
+    if (!epoch_csv_path.empty()) {
+        write_epoch_csv(epoch_csv_path, epoch_records);
+    }
+    print_training_summary(total_params, N, timer_elapsed_sec(total_timer), epoch_records);
 
     close_log();
 

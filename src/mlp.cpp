@@ -151,6 +151,16 @@ void mlp_accumulate_gradients(MLP& net, const MLP& source) {
     }
 }
 
+// Count total trainable parameters (weights + biases) across all layers.
+size_t mlp_total_params(const MLP& net) {
+    size_t total = 0;
+    for (size_t i = 0; i < net.num_layers; ++i) {
+        total += net.layers[i].input_size * net.layers[i].output_size; // weights
+        total += net.layers[i].output_size;                           // biases
+    }
+    return total;
+}
+
 // Deallocate all dynamically allocated arrays in every layer.
 void mlp_free(MLP& net) {
     for (size_t i = 0; i < net.num_layers; ++i) {

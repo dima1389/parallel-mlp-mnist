@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run a single training configuration N times, recording epoch times to a CSV.
+# Run a single training configuration N times, recording metrics to a CSV.
 #
 # Usage:
 #   NUM_RUNS=<N> bash scripts/run_training.sh <impl> <config> [parallelism]
@@ -42,6 +42,18 @@ case "$IMPL" in
         ;;
 esac
 
+# Read hyperparameters from config file for CSV row
+CFG_FILE="configs/${CONFIG}.conf"
+CFG_EPOCHS=$(grep -oP '^\s*epochs\s*=\s*\K[0-9]+' "$CFG_FILE" || echo "0")
+CFG_BATCH_SIZE=$(grep -oP '^\s*batch_size\s*=\s*\K[0-9]+' "$CFG_FILE" || echo "0")
+CFG_LR=$(grep -oP '^\s*learning_rate\s*=\s*\K[0-9.]+' "$CFG_FILE" || echo "0")
+
+# Helper: extract a key's value from the [SUMMARY] block in a file
+extract_summary() {
+    local file="$1" key="$2"
+    sed -n '/\[SUMMARY\]/,/\[\/SUMMARY\]/p' "$file" | grep -oP "^${key}=\K.*" || echo ""
+}
+
 # --- Output setup ---
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 RESULTS_DIR="results/tables"
@@ -54,29 +66,42 @@ mkdir -p "$LOG_DIR"
 TMP=$(mktemp)
 trap 'rm -f "$TMP"' EXIT
 
-echo "config,implementation,parallelism,run,epoch_time_sec" > "$CSV"
+echo "config,implementation,parallelism,run,epochs,batch_size,learning_rate,total_params,total_time_sec,avg_epoch_time_sec,min_epoch_time_sec,max_epoch_time_sec,stddev_epoch_time_sec,final_loss,final_accuracy,best_accuracy,best_accuracy_epoch,throughput_samples_per_sec" > "$CSV"
 
 echo "=== Training $CONFIG ($IMPL_NAME, parallelism=$PAR, $NUM_RUNS run(s)) ==="
 
 for run in $(seq 1 "$NUM_RUNS"); do
     LOG_FILE="$LOG_DIR/run${run}.log"
+    EPOCH_CSV="$LOG_DIR/run${run}_epochs.csv"
     echo "  Run $run/$NUM_RUNS..."
 
     case "$IMPL" in
         seq)
-            ./build/train_seq --config "configs/${CONFIG}.conf" --data "$DATA_DIR" --log "$LOG_FILE" > "$TMP" 2>&1
+            ./build/train_seq --config "$CFG_FILE" --data "$DATA_DIR" --log "$LOG_FILE" --epoch-csv "$EPOCH_CSV" > "$TMP" 2>&1
             ;;
         omp)
-            ./build/train_omp --config "configs/${CONFIG}.conf" --data "$DATA_DIR" --threads "$PAR" --log "$LOG_FILE" > "$TMP" 2>&1
+            ./build/train_omp --config "$CFG_FILE" --data "$DATA_DIR" --threads "$PAR" --log "$LOG_FILE" --epoch-csv "$EPOCH_CSV" > "$TMP" 2>&1
             ;;
         mpi)
-            mpiexec -np "$PAR" ./build/train_mpi --config "configs/${CONFIG}.conf" --data "$DATA_DIR" --log "$LOG_FILE" > "$TMP" 2>&1
+            mpiexec -np "$PAR" ./build/train_mpi --config "$CFG_FILE" --data "$DATA_DIR" --log "$LOG_FILE" --epoch-csv "$EPOCH_CSV" > "$TMP" 2>&1
             ;;
     esac
 
-    epoch_time=$(grep "Epoch" "$TMP" | tail -1 | grep -oP 'Time:\s+\K[0-9.]+')
-    echo "$CONFIG,$IMPL_NAME,$PAR,$run,$epoch_time" >> "$CSV"
-    echo "    Epoch time: $epoch_time s"
+    # Parse [SUMMARY] block from training output
+    total_time=$(extract_summary "$TMP" "total_time")
+    avg_epoch_time=$(extract_summary "$TMP" "avg_epoch_time")
+    min_epoch_time=$(extract_summary "$TMP" "min_epoch_time")
+    max_epoch_time=$(extract_summary "$TMP" "max_epoch_time")
+    stddev_epoch_time=$(extract_summary "$TMP" "stddev_epoch_time")
+    final_loss=$(extract_summary "$TMP" "final_loss")
+    final_accuracy=$(extract_summary "$TMP" "final_accuracy")
+    best_accuracy=$(extract_summary "$TMP" "best_accuracy")
+    best_accuracy_epoch=$(extract_summary "$TMP" "best_accuracy_epoch")
+    throughput=$(extract_summary "$TMP" "throughput_samples_per_sec")
+    total_params=$(extract_summary "$TMP" "total_params")
+
+    echo "$CONFIG,$IMPL_NAME,$PAR,$run,$CFG_EPOCHS,$CFG_BATCH_SIZE,$CFG_LR,$total_params,$total_time,$avg_epoch_time,$min_epoch_time,$max_epoch_time,$stddev_epoch_time,$final_loss,$final_accuracy,$best_accuracy,$best_accuracy_epoch,$throughput" >> "$CSV"
+    echo "    Total time: ${total_time} s  Final accuracy: ${final_accuracy}"
 done
 
 echo ""

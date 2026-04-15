@@ -53,6 +53,9 @@ void mlp_zero_gradients(MLP& net);
 // Used in parallel training to merge per-thread/per-rank gradients.
 void mlp_accumulate_gradients(MLP& net, const MLP& source);
 
+// Count the total number of trainable parameters (weights + biases).
+size_t mlp_total_params(const MLP& net);
+
 // Deallocate all dynamically allocated memory in the network.
 void mlp_free(MLP& net);
 

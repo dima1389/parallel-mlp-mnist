@@ -48,4 +48,22 @@ void close_log();
 // Printf-style function that writes to stdout and, if a log file is open, also to the log file.
 void log_printf(const char* fmt, ...);
 
+// --- Training metrics collection ---
+// Per-epoch training statistics for post-training analysis.
+struct EpochRecord {
+    int    epoch;              // 1-based epoch number
+    double train_loss;         // Average training loss for this epoch
+    double test_accuracy;      // Test set accuracy (0.0–1.0)
+    double epoch_time_sec;     // Wall-clock time for this epoch
+    double cumulative_time_sec;// Cumulative training time up to and including this epoch
+};
+
+// Write per-epoch records to a CSV file.
+void write_epoch_csv(const std::string& path, const std::vector<EpochRecord>& records);
+
+// Print a machine-parseable [SUMMARY]...[/SUMMARY] block with aggregate stats.
+void print_training_summary(size_t total_params, size_t train_samples,
+                            double total_time_sec,
+                            const std::vector<EpochRecord>& records);
+
 #endif // UTILS_H

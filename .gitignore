@@ -11,6 +11,7 @@ data/mnist/processed/
 
 # Results (generated)
 results/logs/*.log
+results/logs/**/*.csv
 results/logs/**/*.log
 results/tables/*.csv
 results/plots/*.png

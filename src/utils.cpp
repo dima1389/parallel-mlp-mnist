@@ -148,3 +148,76 @@ void log_printf(const char* fmt, ...) {
         std::fflush(g_log_fp);
     }
 }
+
+// --- Training metrics ---
+
+void write_epoch_csv(const std::string& path, const std::vector<EpochRecord>& records) {
+    make_parent_dirs(path);
+    FILE* fp = std::fopen(path.c_str(), "w");
+    if (!fp) {
+        std::fprintf(stderr, "Warning: could not open epoch CSV: %s\n", path.c_str());
+        return;
+    }
+    std::fprintf(fp, "epoch,train_loss,test_accuracy,epoch_time_sec,cumulative_time_sec\n");
+    for (const auto& r : records) {
+        std::fprintf(fp, "%d,%.6f,%.6f,%.4f,%.4f\n",
+                     r.epoch, r.train_loss, r.test_accuracy,
+                     r.epoch_time_sec, r.cumulative_time_sec);
+    }
+    std::fclose(fp);
+}
+
+void print_training_summary(size_t total_params, size_t train_samples,
+                            double total_time_sec,
+                            const std::vector<EpochRecord>& records) {
+    int    epochs         = static_cast<int>(records.size());
+    double final_loss     = records.back().train_loss;
+    double final_accuracy = records.back().test_accuracy;
+
+    // Find best accuracy and its epoch
+    double best_accuracy      = 0.0;
+    int    best_accuracy_epoch = 1;
+    for (const auto& r : records) {
+        if (r.test_accuracy > best_accuracy) {
+            best_accuracy       = r.test_accuracy;
+            best_accuracy_epoch = r.epoch;
+        }
+    }
+
+    // Compute epoch time statistics
+    double sum_t  = 0.0;
+    double min_t  = records[0].epoch_time_sec;
+    double max_t  = records[0].epoch_time_sec;
+    for (const auto& r : records) {
+        sum_t += r.epoch_time_sec;
+        if (r.epoch_time_sec < min_t) min_t = r.epoch_time_sec;
+        if (r.epoch_time_sec > max_t) max_t = r.epoch_time_sec;
+    }
+    double avg_t = sum_t / epochs;
+
+    double var_t = 0.0;
+    for (const auto& r : records) {
+        double d = r.epoch_time_sec - avg_t;
+        var_t += d * d;
+    }
+    double stddev_t = (epochs > 1) ? std::sqrt(var_t / epochs) : 0.0;
+
+    double throughput = (avg_t > 0.0)
+        ? static_cast<double>(train_samples) / avg_t
+        : 0.0;
+
+    log_printf("\n[SUMMARY]\n");
+    log_printf("total_time=%.4f\n",               total_time_sec);
+    log_printf("epochs=%d\n",                      epochs);
+    log_printf("final_loss=%.6f\n",                final_loss);
+    log_printf("final_accuracy=%.6f\n",            final_accuracy);
+    log_printf("best_accuracy=%.6f\n",             best_accuracy);
+    log_printf("best_accuracy_epoch=%d\n",         best_accuracy_epoch);
+    log_printf("avg_epoch_time=%.4f\n",            avg_t);
+    log_printf("min_epoch_time=%.4f\n",            min_t);
+    log_printf("max_epoch_time=%.4f\n",            max_t);
+    log_printf("stddev_epoch_time=%.4f\n",         stddev_t);
+    log_printf("throughput_samples_per_sec=%.2f\n", throughput);
+    log_printf("total_params=%zu\n",               total_params);
+    log_printf("[/SUMMARY]\n");
+}
