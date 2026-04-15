@@ -289,11 +289,11 @@
             "problemMatcher": []
         },
         {
-            "label": "Plot Results",
+            "label": "Re-plot Results",
             "type": "shell",
             "command": "python",
             "args": ["scripts/plot_results.py"],
-            "detail": "Generate ASCII summary tables and PNG speedup bar charts from the most recent benchmark CSV in results/tables/",
+            "detail": "Re-generate summary tables and all plots from the most recent run directory in results/. Useful for regenerating plots without re-running training.",
             "group": "none",
             "presentation": {
                 "reveal": "always",

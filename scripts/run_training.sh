@@ -56,23 +56,29 @@ extract_summary() {
 
 # --- Output setup ---
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-RESULTS_DIR="results/tables"
-mkdir -p "$RESULTS_DIR"
+RUN_DIR="results/train_${IMPL}_${CONFIG}_${TIMESTAMP}"
+LOG_DIR="$RUN_DIR/logs"
+TABLE_DIR="$RUN_DIR/tables"
+EPOCH_DIR="$TABLE_DIR/epochs"
+PLOT_DIR="$RUN_DIR/plots"
+CSV="$TABLE_DIR/summary.csv"
+ALL_EPOCHS="$TABLE_DIR/all_epochs.csv"
 
-CSV="$RESULTS_DIR/train_${IMPL}_${CONFIG}_${TIMESTAMP}.csv"
-LOG_DIR="results/logs/train_${IMPL}_${CONFIG}_${TIMESTAMP}"
-mkdir -p "$LOG_DIR"
+mkdir -p "$LOG_DIR" "$EPOCH_DIR" "$PLOT_DIR"
 
 TMP=$(mktemp)
 trap 'rm -f "$TMP"' EXIT
 
 echo "config,implementation,parallelism,run,epochs,batch_size,learning_rate,total_params,total_time_sec,avg_epoch_time_sec,min_epoch_time_sec,max_epoch_time_sec,stddev_epoch_time_sec,final_loss,final_accuracy,best_accuracy,best_accuracy_epoch,throughput_samples_per_sec" > "$CSV"
 
+# Consolidated epoch CSV header
+echo "config,implementation,parallelism,run,epoch,train_loss,test_accuracy,epoch_time_sec,cumulative_time_sec" > "$ALL_EPOCHS"
+
 echo "=== Training $CONFIG ($IMPL_NAME, parallelism=$PAR, $NUM_RUNS run(s)) ==="
 
 for run in $(seq 1 "$NUM_RUNS"); do
     LOG_FILE="$LOG_DIR/run${run}.log"
-    EPOCH_CSV="$LOG_DIR/run${run}_epochs.csv"
+    EPOCH_CSV="$EPOCH_DIR/run${run}_epochs.csv"
     echo "  Run $run/$NUM_RUNS..."
 
     case "$IMPL" in
@@ -102,8 +108,21 @@ for run in $(seq 1 "$NUM_RUNS"); do
 
     echo "$CONFIG,$IMPL_NAME,$PAR,$run,$CFG_EPOCHS,$CFG_BATCH_SIZE,$CFG_LR,$total_params,$total_time,$avg_epoch_time,$min_epoch_time,$max_epoch_time,$stddev_epoch_time,$final_loss,$final_accuracy,$best_accuracy,$best_accuracy_epoch,$throughput" >> "$CSV"
     echo "    Total time: ${total_time} s  Final accuracy: ${final_accuracy}"
+
+    # Append epoch data with metadata columns to consolidated CSV
+    if [ -f "$EPOCH_CSV" ]; then
+        tail -n +2 "$EPOCH_CSV" | awk -v c="$CONFIG" -v i="$IMPL_NAME" -v p="$PAR" -v r="$run" \
+            -F',' '{print c","i","p","r","$0}' >> "$ALL_EPOCHS"
+    fi
 done
 
 echo ""
-echo "Results saved to $CSV"
-echo "Logs saved to $LOG_DIR/"
+echo "Results saved to $RUN_DIR/"
+
+# --- Generate plots ---
+if command -v python &>/dev/null; then
+    echo "Generating plots..."
+    python scripts/plot_results.py "$RUN_DIR"
+else
+    echo "Python not found — skipping plot generation."
+fi

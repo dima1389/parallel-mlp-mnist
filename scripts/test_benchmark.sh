@@ -5,18 +5,22 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 DATA_DIR="data/mnist/raw"
-CSV="results/tables/benchmark_test.csv"
 cfg="configs/test_benchmark.conf"
 cfg_name="test_benchmark"
 NUM_RUNS="${NUM_RUNS:-1}"
 TMP=$(mktemp)
 
-mkdir -p results/tables
-
-# --- Logging setup ---
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-LOG_DIR="results/logs/test_benchmark_${TIMESTAMP}"
-mkdir -p "$LOG_DIR"
+RUN_DIR="results/test_benchmark_${TIMESTAMP}"
+LOG_DIR="$RUN_DIR/logs"
+TABLE_DIR="$RUN_DIR/tables"
+EPOCH_DIR="$TABLE_DIR/epochs"
+PLOT_DIR="$RUN_DIR/plots"
+CSV="$TABLE_DIR/summary.csv"
+ALL_EPOCHS="$TABLE_DIR/all_epochs.csv"
+
+mkdir -p "$LOG_DIR" "$EPOCH_DIR" "$PLOT_DIR"
+
 exec > >(tee "$LOG_DIR/master.log") 2>&1
 
 # Read hyperparameters from config file
@@ -51,20 +55,38 @@ append_summary_row() {
 
 echo "config,implementation,parallelism,run,epochs,batch_size,learning_rate,total_params,total_time_sec,avg_epoch_time_sec,min_epoch_time_sec,max_epoch_time_sec,stddev_epoch_time_sec,final_loss,final_accuracy,best_accuracy,best_accuracy_epoch,throughput_samples_per_sec" > "$CSV"
 
+# Consolidated epoch CSV header
+echo "config,implementation,parallelism,run,epoch,train_loss,test_accuracy,epoch_time_sec,cumulative_time_sec" > "$ALL_EPOCHS"
+
+# Helper: append epoch data with metadata columns to all_epochs.csv
+append_epoch_data() {
+    local epoch_csv="$1" impl="$2" par="$3" run="$4"
+    if [ -f "$epoch_csv" ]; then
+        tail -n +2 "$epoch_csv" | awk -v c="$cfg_name" -v i="$impl" -v p="$par" -v r="$run" \
+            -F',' '{print c","i","p","r","$0}' >> "$ALL_EPOCHS"
+    fi
+}
+
 for run in $(seq 1 "$NUM_RUNS"); do
     echo "Testing sequential (run $run/$NUM_RUNS)..."
-    ./build/train_seq --config "$cfg" --data "$DATA_DIR" --log "$LOG_DIR/seq_${cfg_name}_run${run}.log" --epoch-csv "$LOG_DIR/seq_${cfg_name}_run${run}_epochs.csv" > "$TMP" 2>&1
+    EPOCH_CSV_FILE="$EPOCH_DIR/seq_${cfg_name}_run${run}_epochs.csv"
+    ./build/train_seq --config "$cfg" --data "$DATA_DIR" --log "$LOG_DIR/seq_${cfg_name}_run${run}.log" --epoch-csv "$EPOCH_CSV_FILE" > "$TMP" 2>&1
     append_summary_row "sequential" "1" "$run"
+    append_epoch_data "$EPOCH_CSV_FILE" "sequential" "1" "$run"
     echo "  Sequential: $(extract_summary "$TMP" "total_time") s"
 
     echo "Testing OpenMP (2 threads, run $run/$NUM_RUNS)..."
-    ./build/train_omp --config "$cfg" --data "$DATA_DIR" --threads 2 --log "$LOG_DIR/omp_${cfg_name}_2t_run${run}.log" --epoch-csv "$LOG_DIR/omp_${cfg_name}_2t_run${run}_epochs.csv" > "$TMP" 2>&1
+    EPOCH_CSV_FILE="$EPOCH_DIR/omp_${cfg_name}_2t_run${run}_epochs.csv"
+    ./build/train_omp --config "$cfg" --data "$DATA_DIR" --threads 2 --log "$LOG_DIR/omp_${cfg_name}_2t_run${run}.log" --epoch-csv "$EPOCH_CSV_FILE" > "$TMP" 2>&1
     append_summary_row "openmp" "2" "$run"
+    append_epoch_data "$EPOCH_CSV_FILE" "openmp" "2" "$run"
     echo "  OpenMP 2: $(extract_summary "$TMP" "total_time") s"
 
     echo "Testing MPI (2 procs, run $run/$NUM_RUNS)..."
-    mpiexec -np 2 ./build/train_mpi --config "$cfg" --data "$DATA_DIR" --log "$LOG_DIR/mpi_${cfg_name}_2p_run${run}.log" --epoch-csv "$LOG_DIR/mpi_${cfg_name}_2p_run${run}_epochs.csv" > "$TMP" 2>&1
+    EPOCH_CSV_FILE="$EPOCH_DIR/mpi_${cfg_name}_2p_run${run}_epochs.csv"
+    mpiexec -np 2 ./build/train_mpi --config "$cfg" --data "$DATA_DIR" --log "$LOG_DIR/mpi_${cfg_name}_2p_run${run}.log" --epoch-csv "$EPOCH_CSV_FILE" > "$TMP" 2>&1
     append_summary_row "mpi" "2" "$run"
+    append_epoch_data "$EPOCH_CSV_FILE" "mpi" "2" "$run"
     echo "  MPI 2: $(extract_summary "$TMP" "total_time") s"
 done
 
@@ -74,5 +96,13 @@ echo ""
 echo "=== CSV Content ==="
 cat "$CSV"
 echo ""
-echo "Logs saved to $LOG_DIR/"
+echo "Results saved to $RUN_DIR/"
 echo "Test PASSED"
+
+# --- Generate plots ---
+if command -v python &>/dev/null; then
+    echo "Generating plots..."
+    python scripts/plot_results.py "$RUN_DIR"
+else
+    echo "Python not found — skipping plot generation."
+fi

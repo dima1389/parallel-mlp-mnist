@@ -10,12 +10,7 @@ data/mnist/raw/t10k-*
 data/mnist/processed/
 
 # Results (generated)
-results/logs/*.log
-results/logs/**/*.csv
-results/logs/**/*.log
-results/tables/*.csv
-results/plots/*.png
-results/plots/*.pdf
+results/
 
 # OS files
 .DS_Store
