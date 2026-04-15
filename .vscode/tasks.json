@@ -146,6 +146,20 @@
             "problemMatcher": []
         },
         {
+            "label": "Build All Debug",
+            "type": "shell",
+            "command": "bash",
+            "args": ["-c", "mkdir -p results/logs && make debug 2>&1 | tee results/logs/build_debug.log"],
+            "detail": "Build all three debug binaries with debug symbols (-g -O0): train_seq_dbg, train_omp_dbg, train_mpi_dbg",
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
             "label": "Build Debug Sequential",
             "type": "shell",
             "command": "bash",
@@ -186,6 +200,14 @@
                 "clear": true
             },
             "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Rebuild All",
+            "detail": "Clean all build artifacts then rebuild all three training binaries from scratch",
+            "group": "build",
+            "dependsOn": ["Clean Build", "Build All"],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
         },
         {
             "label": "Build & Run Tests",
@@ -263,7 +285,37 @@
             "type": "shell",
             "command": "bash",
             "args": ["-c", "NUM_RUNS=${input:numRuns} bash scripts/benchmark.sh"],
-            "detail": "Run the complete benchmark suite across all configs (small/medium/large) and parallelism levels (1\u20138 threads/processes) with N repeated runs. Outputs a timestamped CSV to results/tables/",
+            "detail": "Run the complete benchmark suite across all configs (small/medium/large) and parallelism levels (1/8 threads/processes) with N repeated runs. Outputs a timestamped CSV to results/tables/",
+            "group": "none",
+            "dependsOn": "Build All",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Benchmark OpenMP",
+            "type": "shell",
+            "command": "bash",
+            "args": ["-c", "NUM_RUNS=${input:numRuns} SKIP_MPI=1 bash scripts/benchmark.sh"],
+            "detail": "Run benchmark with sequential baseline + OpenMP (1-8 threads) across all configs. Skips MPI.",
+            "group": "none",
+            "dependsOn": "Build All",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Benchmark MPI",
+            "type": "shell",
+            "command": "bash",
+            "args": ["-c", "NUM_RUNS=${input:numRuns} SKIP_OMP=1 bash scripts/benchmark.sh"],
+            "detail": "Run benchmark with sequential baseline + MPI (1-8 processes) across all configs. Skips OpenMP.",
             "group": "none",
             "dependsOn": "Build All",
             "presentation": {

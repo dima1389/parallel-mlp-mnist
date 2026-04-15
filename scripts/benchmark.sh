@@ -15,6 +15,8 @@ CONFIGS=("configs/small_network.conf" "configs/medium_network.conf" "configs/lar
 OMP_THREADS=(1 2 3 4 5 6 7 8)
 MPI_PROCS=(1 2 3 4 5 6 7 8)
 NUM_RUNS="${NUM_RUNS:-1}"
+SKIP_OMP="${SKIP_OMP:-0}"
+SKIP_MPI="${SKIP_MPI:-0}"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 RUN_DIR="results/benchmark_${TIMESTAMP}"
@@ -91,6 +93,7 @@ for cfg in "${CONFIGS[@]}"; do
         append_epoch_data "$EPOCH_CSV_FILE" "$cfg_name" "sequential" "1" "$run"
 
         # --- OpenMP with varying thread counts ---
+        if [ "$SKIP_OMP" != "1" ]; then
         for t in "${OMP_THREADS[@]}"; do
             echo "  OpenMP ($t threads, run $run/$NUM_RUNS)..."
             EPOCH_CSV_FILE="$EPOCH_DIR/omp_${cfg_name}_${t}t_run${run}_epochs.csv"
@@ -98,8 +101,10 @@ for cfg in "${CONFIGS[@]}"; do
             append_summary_row "$cfg_name" "openmp" "$t" "$run" "$cfg"
             append_epoch_data "$EPOCH_CSV_FILE" "$cfg_name" "openmp" "$t" "$run"
         done
+        fi
 
         # --- MPI with varying process counts ---
+        if [ "$SKIP_MPI" != "1" ]; then
         for np in "${MPI_PROCS[@]}"; do
             echo "  MPI ($np procs, run $run/$NUM_RUNS)..."
             EPOCH_CSV_FILE="$EPOCH_DIR/mpi_${cfg_name}_${np}p_run${run}_epochs.csv"
@@ -107,6 +112,7 @@ for cfg in "${CONFIGS[@]}"; do
             append_summary_row "$cfg_name" "mpi" "$np" "$run" "$cfg"
             append_epoch_data "$EPOCH_CSV_FILE" "$cfg_name" "mpi" "$np" "$run"
         done
+        fi
     done
 done
 
