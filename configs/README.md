@@ -33,4 +33,8 @@ The input layer is always 784 (28×28 MNIST pixels, flattened) and the output la
 
 All predefined configurations use: `learning_rate=0.01`, `batch_size=64`.
 
+> **MPI note:** When training with MPI, each mini-batch is split evenly across ranks.
+> If `batch_size` is smaller than the number of MPI processes, some ranks will receive
+> zero samples per batch. Use `batch_size >= world_size` for proper load distribution.
+
 The `test_benchmark.conf` is a single-epoch variant of `small_network.conf`, used for quick validation of the benchmark infrastructure.

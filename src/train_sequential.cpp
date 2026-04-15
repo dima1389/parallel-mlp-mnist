@@ -12,6 +12,9 @@
 #include <cstdlib>
 #include <string>
 #include <vector>
+#include <numeric>
+#include <algorithm>
+#include <random>
 
 static void print_usage(const char* prog) {
     std::fprintf(stderr, "Usage: %s --config <config_file> [--data <mnist_dir>] [--log <log_file>] [--epoch-csv <csv_file>]\n", prog);
@@ -82,7 +85,7 @@ int main(int argc, char* argv[]) {
 
     // Buffer to store predictions for test set accuracy evaluation
     size_t num_classes = 10;
-    double* test_preds = alloc_matrix(test_images.num_samples, num_classes);
+    real_t* test_preds = alloc_matrix(test_images.num_samples, num_classes);
 
     Timer epoch_timer, total_timer;
     std::vector<EpochRecord> epoch_records;
@@ -94,8 +97,16 @@ int main(int argc, char* argv[]) {
     size_t N = train_images.num_samples;
     size_t batch_size = static_cast<size_t>(cfg.batch_size);
 
+    // Index array for epoch-level shuffling
+    std::vector<size_t> indices(N);
+    std::iota(indices.begin(), indices.end(), 0);
+    std::mt19937 shuffle_rng(42);
+
     for (int epoch = 0; epoch < cfg.epochs; ++epoch) {
         timer_start(epoch_timer);
+
+        // Shuffle sample order each epoch for better convergence
+        std::shuffle(indices.begin(), indices.end(), shuffle_rng);
 
         double epoch_loss = 0.0;
 
@@ -106,12 +117,13 @@ int main(int argc, char* argv[]) {
 
             mlp_zero_gradients(net);
 
-            for (size_t s = start; s < end; ++s) {
-                const double* img = train_images.images + s * train_images.image_size;
+            for (size_t si = start; si < end; ++si) {
+                size_t s = indices[si];
+                const real_t* img = train_images.images + s * train_images.image_size;
                 uint8_t label = train_labels.labels[s];
 
                 // Forward pass: compute predictions
-                const double* output = mlp_forward(net, img);
+                const real_t* output = mlp_forward(net, img);
 
                 // Track running loss for this epoch
                 epoch_loss += cross_entropy_loss(output, label, num_classes);
@@ -140,8 +152,8 @@ int main(int argc, char* argv[]) {
 
         // Evaluate accuracy on the full test set
         for (size_t s = 0; s < test_images.num_samples; ++s) {
-            const double* img = test_images.images + s * test_images.image_size;
-            const double* output = mlp_forward(net, img);
+            const real_t* img = test_images.images + s * test_images.image_size;
+            const real_t* output = mlp_forward(net, img);
             for (size_t c = 0; c < num_classes; ++c) {
                 test_preds[s * num_classes + c] = output[c];
             }
@@ -168,7 +180,7 @@ int main(int argc, char* argv[]) {
     close_log();
 
     // Cleanup all allocated memory
-    free_matrix(test_preds);
+    free_array(test_preds);
     mlp_free(net);
     free_dataset(train_images);
     free_dataset(train_labels);

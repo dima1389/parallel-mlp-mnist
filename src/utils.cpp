@@ -14,40 +14,39 @@
 #include <sys/stat.h>
 #endif
 
-// Allocate a zero-initialized vector of doubles.
-double* alloc_vector(size_t size) {
-    double* v = new double[size]();
+// Allocate a zero-initialized vector.
+real_t* alloc_vector(size_t size) {
+    real_t* v = new real_t[size]();
     return v;
 }
 
 // Allocate a zero-initialized 2D matrix stored as a flat 1D array (row-major).
-double* alloc_matrix(size_t rows, size_t cols) {
-    double* m = new double[rows * cols]();
+real_t* alloc_matrix(size_t rows, size_t cols) {
+    real_t* m = new real_t[rows * cols]();
     return m;
 }
 
-// Free a matrix (or vector) allocated with alloc_matrix/alloc_vector.
-void free_matrix(double* matrix) {
-    delete[] matrix;
+// Free an array allocated with alloc_matrix/alloc_vector.
+void free_array(real_t* arr) {
+    delete[] arr;
 }
 
 // He initialization: draw weights from N(0, sqrt(2/fan_in)).
 // This variance scaling prevents vanishing/exploding gradients with ReLU.
-// Uses a fixed seed (42) for reproducibility across parallel runs.
-void he_init(double* weights, size_t fan_in, size_t fan_out) {
-    std::mt19937 gen(42);
+// Uses an external RNG so that successive layers draw unique sequences.
+void he_init(real_t* weights, size_t fan_in, size_t fan_out, std::mt19937& gen) {
     double stddev = std::sqrt(2.0 / static_cast<double>(fan_in));
     std::normal_distribution<double> dist(0.0, stddev);
 
     size_t total = fan_in * fan_out;
     for (size_t i = 0; i < total; ++i) {
-        weights[i] = dist(gen);
+        weights[i] = static_cast<real_t>(dist(gen));
     }
 }
 
 // Fill a buffer with zeros using memset (faster than a loop for large arrays).
-void zero_init(double* data, size_t size) {
-    std::memset(data, 0, size * sizeof(double));
+void zero_init(real_t* data, size_t size) {
+    std::memset(data, 0, size * sizeof(real_t));
 }
 
 // Remove leading and trailing whitespace from a string.
@@ -97,6 +96,20 @@ Config load_config(const std::string& filepath) {
         } else if (key == "batch_size") {
             cfg.batch_size = std::stoi(val);
         }
+    }
+
+    // Validate parsed configuration values
+    if (cfg.hidden_layers.empty()) {
+        throw std::runtime_error("Config error: hidden_layers must specify at least one layer size");
+    }
+    if (cfg.epochs <= 0) {
+        throw std::runtime_error("Config error: epochs must be positive (got " + std::to_string(cfg.epochs) + ")");
+    }
+    if (cfg.learning_rate <= 0.0) {
+        throw std::runtime_error("Config error: learning_rate must be positive (got " + std::to_string(cfg.learning_rate) + ")");
+    }
+    if (cfg.batch_size < 1) {
+        throw std::runtime_error("Config error: batch_size must be >= 1 (got " + std::to_string(cfg.batch_size) + ")");
     }
 
     return cfg;

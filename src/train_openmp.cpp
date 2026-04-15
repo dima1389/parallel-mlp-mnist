@@ -15,6 +15,9 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <numeric>
+#include <algorithm>
+#include <random>
 
 static void print_usage(const char* prog) {
     std::fprintf(stderr,
@@ -88,13 +91,21 @@ int main(int argc, char* argv[]) {
     MLP net = mlp_create(layer_sizes);
     size_t total_params = mlp_total_params(net);
     size_t num_classes = 10;
-    double* test_preds = alloc_matrix(test_images.num_samples, num_classes);
+    real_t* test_preds = alloc_matrix(test_images.num_samples, num_classes);
 
-    // Create per-thread network copies for independent forward/backward passes.
-    // Each thread accumulates gradients into its own local network.
+    // Create per-thread scratch networks for independent forward/backward passes.
+    // Thread-local networks share the master's weight/bias pointers (read-only)
+    // and only own their own z/a/delta/relu_d/dW/db buffers.
     std::vector<MLP> thread_nets(static_cast<size_t>(num_threads));
     for (int t = 0; t < num_threads; ++t) {
         thread_nets[static_cast<size_t>(t)] = mlp_create(layer_sizes);
+        // Free redundant weight/bias copies; thread nets will share master's
+        for (size_t l = 0; l < net.num_layers; ++l) {
+            free_array(thread_nets[static_cast<size_t>(t)].layers[l].weights);
+            free_array(thread_nets[static_cast<size_t>(t)].layers[l].biases);
+            thread_nets[static_cast<size_t>(t)].layers[l].weights = net.layers[l].weights;
+            thread_nets[static_cast<size_t>(t)].layers[l].biases  = net.layers[l].biases;
+        }
     }
 
     Timer epoch_timer, total_timer;
@@ -106,8 +117,17 @@ int main(int argc, char* argv[]) {
 
     size_t batch_size = static_cast<size_t>(cfg.batch_size);
 
+    // Index array for epoch-level shuffling
+    std::vector<size_t> indices(N);
+    std::iota(indices.begin(), indices.end(), 0);
+    std::mt19937 shuffle_rng(42);
+
     for (int epoch = 0; epoch < cfg.epochs; ++epoch) {
         timer_start(epoch_timer);
+
+        // Shuffle sample order each epoch for better convergence
+        std::shuffle(indices.begin(), indices.end(), shuffle_rng);
+
         double epoch_loss = 0.0;
 
         // --- Mini-batch parallel SGD ---
@@ -117,30 +137,24 @@ int main(int argc, char* argv[]) {
             size_t end = std::min(start + batch_size, N);
             size_t actual_batch = end - start;
 
-            // Sync thread-local networks: copy current master weights, zero gradients
+            // Zero thread-local gradients (weights are shared with master)
             for (size_t t = 0; t < static_cast<size_t>(num_threads); ++t) {
-                MLP& tnet = thread_nets[t];
-                for (size_t l = 0; l < net.num_layers; ++l) {
-                    size_t w_size = net.layers[l].input_size * net.layers[l].output_size;
-                    std::memcpy(tnet.layers[l].weights, net.layers[l].weights, w_size * sizeof(double));
-                    std::memcpy(tnet.layers[l].biases, net.layers[l].biases,
-                                net.layers[l].output_size * sizeof(double));
-                }
-                mlp_zero_gradients(tnet);
+                mlp_zero_gradients(thread_nets[t]);
             }
 
             double batch_loss = 0.0;
 
-            // Each thread processes one sample in the mini-batch
+            // Each thread processes a subset of the mini-batch
             #pragma omp parallel for reduction(+:batch_loss) schedule(static)
-            for (size_t s = start; s < end; ++s) {
+            for (size_t si = start; si < end; ++si) {
                 int tid = omp_get_thread_num();
                 MLP& local_net = thread_nets[static_cast<size_t>(tid)];
 
-                const double* img = train_images.images + s * train_images.image_size;
+                size_t s = indices[si];
+                const real_t* img = train_images.images + s * train_images.image_size;
                 uint8_t label = train_labels.labels[s];
 
-                const double* output = mlp_forward(local_net, img);
+                const real_t* output = mlp_forward(local_net, img);
                 batch_loss += cross_entropy_loss(output, label, num_classes);
                 mlp_backward(local_net, img, label);
             }
@@ -171,10 +185,13 @@ int main(int argc, char* argv[]) {
         timer_stop(epoch_timer);
         epoch_loss /= static_cast<double>(N);
 
-        // Evaluate on test set using master network
+        // Evaluate on test set using thread-local scratch networks (parallel)
+        #pragma omp parallel for schedule(static)
         for (size_t s = 0; s < test_images.num_samples; ++s) {
-            const double* img = test_images.images + s * test_images.image_size;
-            const double* output = mlp_forward(net, img);
+            int tid = omp_get_thread_num();
+            MLP& local_net = thread_nets[static_cast<size_t>(tid)];
+            const real_t* img = test_images.images + s * test_images.image_size;
+            const real_t* output = mlp_forward(local_net, img);
             for (size_t c = 0; c < num_classes; ++c) {
                 test_preds[s * num_classes + c] = output[c];
             }
@@ -200,11 +217,15 @@ int main(int argc, char* argv[]) {
 
     close_log();
 
-    // Cleanup: free thread-local networks, master network, and datasets
+    // Cleanup: free thread-local scratch buffers (null shared pointers first), master network, and datasets
     for (int t = 0; t < num_threads; ++t) {
+        for (size_t l = 0; l < thread_nets[static_cast<size_t>(t)].num_layers; ++l) {
+            thread_nets[static_cast<size_t>(t)].layers[l].weights = nullptr;
+            thread_nets[static_cast<size_t>(t)].layers[l].biases  = nullptr;
+        }
         mlp_free(thread_nets[static_cast<size_t>(t)]);
     }
-    free_matrix(test_preds);
+    free_array(test_preds);
     mlp_free(net);
     free_dataset(train_images);
     free_dataset(train_labels);

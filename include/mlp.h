@@ -8,17 +8,18 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+#include "types.h"
 
 // A single fully-connected layer with storage for forward/backward pass data.
 struct Layer {
-    double* weights;    // Weight matrix [input_size x output_size], row-major
-    double* biases;     // Bias vector [output_size]
-    double* z;          // Pre-activation values [output_size] (stored for backward pass)
-    double* a;          // Post-activation values [output_size] (layer output)
-    double* dW;         // Accumulated weight gradients [input_size x output_size]
-    double* db;         // Accumulated bias gradients [output_size]
-    double* delta;      // Error signal for backprop [output_size]
-    double* relu_d;     // Pre-allocated ReLU derivative buffer [output_size]
+    real_t* weights;    // Weight matrix [input_size x output_size], row-major
+    real_t* biases;     // Bias vector [output_size]
+    real_t* z;          // Pre-activation values [output_size] (stored for backward pass)
+    real_t* a;          // Post-activation values [output_size] (layer output)
+    real_t* dW;         // Accumulated weight gradients [input_size x output_size]
+    real_t* db;         // Accumulated bias gradients [output_size]
+    real_t* delta;      // Error signal for backprop [output_size]
+    real_t* relu_d;     // Pre-allocated ReLU derivative buffer [output_size]
     size_t  input_size;
     size_t  output_size;
 };
@@ -37,14 +38,14 @@ MLP mlp_create(const std::vector<int>& layer_sizes);
 
 // Run forward pass for a single sample. Returns pointer to output layer
 // activations (softmax probabilities). input: [input_size].
-const double* mlp_forward(MLP& net, const double* input);
+const real_t* mlp_forward(MLP& net, const real_t* input);
 
 // Run backward pass (backpropagation) for a single sample.
 // Computes and accumulates gradients for all layers.
-void mlp_backward(MLP& net, const double* input, uint8_t label);
+void mlp_backward(MLP& net, const real_t* input, uint8_t label);
 
 // Apply SGD weight update using accumulated gradients.
-void mlp_update(MLP& net, double learning_rate);
+void mlp_update(MLP& net, real_t learning_rate);
 
 // Reset all gradient accumulators (dW, db) to zero.
 void mlp_zero_gradients(MLP& net);

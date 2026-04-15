@@ -8,18 +8,21 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <random>
+#include "types.h"
 
 // --- Memory allocation helpers (zero-initialized) ---
-double* alloc_vector(size_t size);
-double* alloc_matrix(size_t rows, size_t cols);
-void    free_matrix(double* matrix);
+real_t* alloc_vector(size_t size);
+real_t* alloc_matrix(size_t rows, size_t cols);
+void    free_array(real_t* arr);
 
 // --- Weight initialization ---
 // He initialization: N(0, sqrt(2/fan_in)). Recommended for ReLU networks.
-void he_init(double* weights, size_t fan_in, size_t fan_out);
+// Accepts an external RNG to ensure layers get different weight sequences.
+void he_init(real_t* weights, size_t fan_in, size_t fan_out, std::mt19937& gen);
 
 // Set all elements to zero using memset.
-void zero_init(double* data, size_t size);
+void zero_init(real_t* data, size_t size);
 
 // --- Configuration file parsing ---
 // Training hyperparameters loaded from a key=value config file.

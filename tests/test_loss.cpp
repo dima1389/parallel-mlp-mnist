@@ -1,5 +1,6 @@
 #include "activations.h"
 #include "loss.h"
+#include "types.h"
 #include <cassert>
 #include <cmath>
 #include <cstdio>
@@ -13,8 +14,8 @@ static bool approx_eq(double a, double b, double eps = 1e-6) {
 
 // Test that ReLU zeroes negatives and passes through positives.
 static void test_relu() {
-    double input[]  = {-2.0, -0.5, 0.0, 0.5, 2.0};
-    double output[5];
+    real_t input[]  = {-2.0, -0.5, 0.0, 0.5, 2.0};
+    real_t output[5];
     relu(input, output, 5);
 
     assert(output[0] == 0.0);
@@ -27,8 +28,8 @@ static void test_relu() {
 
 // Test that ReLU derivative is 1 for positive, 0 for non-positive.
 static void test_relu_derivative() {
-    double input[]  = {-2.0, -0.5, 0.0, 0.5, 2.0};
-    double output[5];
+    real_t input[]  = {-2.0, -0.5, 0.0, 0.5, 2.0};
+    real_t output[5];
     relu_derivative(input, output, 5);
 
     assert(output[0] == 0.0);
@@ -41,8 +42,8 @@ static void test_relu_derivative() {
 
 // Test that softmax outputs sum to 1 and preserve input ordering.
 static void test_softmax() {
-    double input[]  = {1.0, 2.0, 3.0};
-    double output[3];
+    real_t input[]  = {1.0, 2.0, 3.0};
+    real_t output[3];
     softmax(input, output, 3);
 
     // Probabilities must sum to 1.0
@@ -57,8 +58,8 @@ static void test_softmax() {
 
 // Test that softmax handles very large inputs without overflow.
 static void test_softmax_numerically_stable() {
-    double input[]  = {1000.0, 1001.0, 1002.0};
-    double output[3];
+    real_t input[]  = {1000.0, 1001.0, 1002.0};
+    real_t output[3];
     softmax(input, output, 3);
 
     double sum = output[0] + output[1] + output[2];
@@ -69,13 +70,13 @@ static void test_softmax_numerically_stable() {
 // Test CE loss: correct prediction should give low loss, wrong one high loss.
 static void test_cross_entropy_loss() {
     // Good prediction: high probability on correct class -> low loss
-    double pred_perfect[] = {0.01, 0.01, 0.96, 0.01, 0.01};
-    double loss = cross_entropy_loss(pred_perfect, 2, 5);
+    real_t pred_perfect[] = {0.01, 0.01, 0.96, 0.01, 0.01};
+    real_t loss = cross_entropy_loss(pred_perfect, 2, 5);
     assert(loss < 0.1);
     std::printf("  PASS: cross_entropy_loss (good prediction)\n");
 
     // Bad prediction: low probability on correct class -> high loss
-    double pred_bad[] = {0.01, 0.96, 0.01, 0.01, 0.01};
+    real_t pred_bad[] = {0.01, 0.96, 0.01, 0.01, 0.01};
     loss = cross_entropy_loss(pred_bad, 2, 5);
     assert(loss > 2.0);
     std::printf("  PASS: cross_entropy_loss (bad prediction)\n");
@@ -83,8 +84,8 @@ static void test_cross_entropy_loss() {
 
 // Test gradient: grad[label] = pred - 1, grad[other] = pred.
 static void test_cross_entropy_gradient() {
-    double pred[] = {0.1, 0.2, 0.5, 0.1, 0.1};
-    double grad[5];
+    real_t pred[] = {0.1, 0.2, 0.5, 0.1, 0.1};
+    real_t grad[5];
     cross_entropy_softmax_gradient(pred, 2, grad, 5);
 
     assert(approx_eq(grad[0], 0.1));

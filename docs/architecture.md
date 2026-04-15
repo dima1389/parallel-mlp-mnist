@@ -15,7 +15,7 @@ This document describes the code-level architecture of the project: module respo
 | **optimizer** | `optimizer.h` | `optimizer.cpp` | SGD weight update | `sgd_update()` |
 | **metrics** | `metrics.h` | `metrics.cpp` | Classification accuracy | `compute_accuracy()` |
 | **timer** | `timer.h` | `timer.cpp` | Wall-clock timing | `Timer`, `timer_start()`, `timer_stop()`, `timer_elapsed_sec()` |
-| **utils** | `utils.h` | `utils.cpp` | Config parsing and memory helpers | `Config`, `load_config()`, `alloc_vector()`, `alloc_matrix()`, `free_matrix()`, `he_init()`, `zero_init()` |
+| **utils** | `utils.h` | `utils.cpp` | Config parsing and memory helpers | `Config`, `load_config()`, `alloc_vector()`, `alloc_matrix()`, `free_array()`, `he_init()`, `zero_init()` |
 
 ---
 
@@ -186,6 +186,6 @@ Key implementation details:
 ## Memory Management
 
 - **Allocation**: `alloc_vector(size)` and `alloc_matrix(rows, cols)` allocate raw `double*` arrays via `new double[]`
-- **Deallocation**: `free_matrix()` calls `delete[]`; `mlp_free()` frees all per-layer buffers; `free_dataset()` frees image and label arrays
+- **Deallocation**: `free_array()` calls `delete[]`; `mlp_free()` frees all per-layer buffers; `free_dataset()` frees image and label arrays
 - **Matrix layout**: All weight matrices are stored as contiguous row-major flat arrays: `W[input_size × output_size]`, accessed as `W[row * output_size + col]`
 - **Buffer lifecycle**: Gradient buffers (`dW`, `db`) are allocated once in `mlp_create()`, zeroed per batch via `mlp_zero_gradients()`, accumulated during `mlp_backward()`, and freed in `mlp_free()`

@@ -13,8 +13,8 @@
 
 CXX      = g++
 MPICXX   = mpicxx
-CXXFLAGS = -std=c++17 -O2 -Wall -Wextra -Iinclude
-DEBUG_CXXFLAGS = -std=c++17 -g -O0 -Wall -Wextra -Iinclude
+CXXFLAGS = -std=c++17 -O2 -Wall -Wextra -MMD -MP -Iinclude
+DEBUG_CXXFLAGS = -std=c++17 -g -O0 -Wall -Wextra -MMD -MP -Iinclude
 LDFLAGS  =
 
 SRC_DIR   = src
@@ -126,3 +126,6 @@ $(BUILD_DIR):
 
 clean:
 	rm -rf $(BUILD_DIR)/*
+
+# Include auto-generated header dependency files
+-include $(wildcard $(BUILD_DIR)/*.d)

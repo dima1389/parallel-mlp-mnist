@@ -35,8 +35,8 @@ static void test_forward_output_shape() {
     std::vector<int> sizes = {4, 3, 2};
     MLP net = mlp_create(sizes);
 
-    double input[] = {0.1, 0.2, 0.3, 0.4};
-    const double* output = mlp_forward(net, input);
+    real_t input[] = {0.1, 0.2, 0.3, 0.4};
+    const real_t* output = mlp_forward(net, input);
 
     // Softmax output must sum to 1.0
     double sum = output[0] + output[1];
@@ -55,7 +55,7 @@ static void test_backward_updates_gradients() {
     std::vector<int> sizes = {4, 3, 2};
     MLP net = mlp_create(sizes);
 
-    double input[] = {0.1, 0.2, 0.3, 0.4};
+    real_t input[] = {0.1, 0.2, 0.3, 0.4};
     mlp_zero_gradients(net);
     mlp_forward(net, input);
     mlp_backward(net, input, 0);
@@ -83,12 +83,12 @@ static void test_training_reduces_loss() {
     std::vector<int> sizes = {4, 8, 2};
     MLP net = mlp_create(sizes);
 
-    double input[] = {0.5, 0.3, 0.8, 0.1};
+    real_t input[] = {0.5, 0.3, 0.8, 0.1};
     uint8_t label = 1;
-    double lr = 0.1;
+    real_t lr = 0.1;
 
     // Measure initial loss
-    const double* out = mlp_forward(net, input);
+    const real_t* out = mlp_forward(net, input);
     double initial_loss = -std::log(std::max(out[label], 1e-12));
 
     // Train for 50 SGD steps on the same sample

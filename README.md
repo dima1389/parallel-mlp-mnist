@@ -247,6 +247,8 @@ mpiexec -np 4 ./build/train_mpi --config configs/small_network.conf
 
 **Expected output**: Same format as sequential (only rank 0 prints output), with faster training as process count increases.
 
+> **Note**: Each mini-batch is split evenly across MPI ranks. Ensure `batch_size` (in the config) is at least as large as the number of processes (`-np`) so every rank receives at least one sample per batch.
+
 > **VS Code Task**: `Train MPI` — prompts you to select a configuration file, process count (1–8), and number of runs. Produces a timestamped CSV in `results/tables/` and per-run logs in `results/logs/`.
 
 ---

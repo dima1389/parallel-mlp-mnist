@@ -7,10 +7,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include "types.h"
 
 // Holds either image data or label data (or both) for an MNIST split.
 struct Dataset {
-    double*  images;       // Flattened pixel data: [num_samples x image_size]
+    real_t*  images;       // Flattened pixel data: [num_samples x image_size]
     uint8_t* labels;       // Class labels (0-9): [num_samples]
     size_t   num_samples;  // Number of samples in this dataset
     size_t   image_size;   // Pixels per image (28*28 = 784 for MNIST)

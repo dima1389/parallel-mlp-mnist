@@ -41,10 +41,10 @@ Dataset load_mnist_images(const std::string& filepath) {
     auto* raw = new uint8_t[total_pixels];
     f.read(reinterpret_cast<char*>(raw), static_cast<std::streamsize>(total_pixels));
 
-    // Convert to double and normalize pixel values from [0,255] to [0,1]
-    auto* images = new double[total_pixels];
+    // Convert to real_t and normalize pixel values from [0,255] to [0,1]
+    auto* images = new real_t[total_pixels];
     for (size_t i = 0; i < total_pixels; ++i) {
-        images[i] = static_cast<double>(raw[i]) / 255.0;
+        images[i] = static_cast<real_t>(raw[i]) / static_cast<real_t>(255.0);
     }
     delete[] raw;
 

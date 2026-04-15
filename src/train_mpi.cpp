@@ -13,8 +13,17 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <climits>
 #include <string>
 #include <vector>
+#include <numeric>
+#include <algorithm>
+#include <random>
+#include <type_traits>
+
+// Map real_t to the matching MPI datatype
+static constexpr MPI_Datatype MPI_REAL_T =
+    std::is_same<real_t, float>::value ? MPI_FLOAT : MPI_DOUBLE;
 
 static void print_usage(const char* prog) {
     std::fprintf(stderr, "Usage: mpirun -np <N> %s --config <config_file> [--data <mnist_dir>] [--log <log_file>] [--epoch-csv <csv_file>]\n", prog);
@@ -100,12 +109,22 @@ int main(int argc, char* argv[]) {
     // Count total parameters (weights + biases) for the Allreduce buffer
     size_t total_params = mlp_total_params(net);
 
+    // Guard against int overflow in MPI_Allreduce count parameter
+    if (total_params > static_cast<size_t>(INT_MAX)) {
+        if (rank == 0) {
+            std::fprintf(stderr, "Error: total_params (%zu) exceeds INT_MAX; "
+                         "cannot use MPI_Allreduce with this network size.\n", total_params);
+        }
+        mlp_free(net);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
     // Flat buffers for packing gradients before Allreduce
-    double* local_grad  = alloc_vector(total_params);
-    double* global_grad = alloc_vector(total_params);
+    real_t* local_grad  = alloc_vector(total_params);
+    real_t* global_grad = alloc_vector(total_params);
 
     // Only rank 0 needs the test prediction buffer
-    double* test_preds = nullptr;
+    real_t* test_preds = nullptr;
     if (rank == 0) {
         test_preds = alloc_matrix(test_images.num_samples, num_classes);
     }
@@ -116,8 +135,16 @@ int main(int argc, char* argv[]) {
 
     if (rank == 0) timer_start(total_timer);
 
+    // Index array for epoch-level shuffling (same seed on all ranks for consistency)
+    std::vector<size_t> indices(N);
+    std::iota(indices.begin(), indices.end(), 0);
+    std::mt19937 shuffle_rng(42);
+
     for (int epoch = 0; epoch < cfg.epochs; ++epoch) {
         if (rank == 0) timer_start(epoch_timer);
+
+        // Shuffle sample order each epoch (deterministic, same on all ranks)
+        std::shuffle(indices.begin(), indices.end(), shuffle_rng);
 
         double local_loss = 0.0;
 
@@ -138,11 +165,12 @@ int main(int argc, char* argv[]) {
 
             // Each rank accumulates gradients over its local portion of the batch
             mlp_zero_gradients(net);
-            for (size_t s = local_offset; s < local_offset + local_count; ++s) {
-                const double* img = train_images.images + s * train_images.image_size;
+            for (size_t si = local_offset; si < local_offset + local_count; ++si) {
+                size_t s = indices[si];
+                const real_t* img = train_images.images + s * train_images.image_size;
                 uint8_t label = train_labels.labels[s];
 
-                const double* output = mlp_forward(net, img);
+                const real_t* output = mlp_forward(net, img);
                 local_loss += cross_entropy_loss(output, label, num_classes);
                 mlp_backward(net, img, label);
             }
@@ -152,15 +180,15 @@ int main(int argc, char* argv[]) {
             for (size_t l = 0; l < net.num_layers; ++l) {
                 Layer& layer = net.layers[l];
                 size_t w_size = layer.input_size * layer.output_size;
-                std::memcpy(local_grad + offset, layer.dW, w_size * sizeof(double));
+                std::memcpy(local_grad + offset, layer.dW, w_size * sizeof(real_t));
                 offset += w_size;
-                std::memcpy(local_grad + offset, layer.db, layer.output_size * sizeof(double));
+                std::memcpy(local_grad + offset, layer.db, layer.output_size * sizeof(real_t));
                 offset += layer.output_size;
             }
 
             // One Allreduce per mini-batch: sum gradients across all ranks
             MPI_Allreduce(local_grad, global_grad, static_cast<int>(total_params),
-                           MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+                           MPI_REAL_T, MPI_SUM, MPI_COMM_WORLD);
 
             // Unpack, average over actual_batch size, and apply SGD update
             double inv_batch = 1.0 / static_cast<double>(actual_batch);
@@ -190,8 +218,8 @@ int main(int argc, char* argv[]) {
             global_loss /= static_cast<double>(N);
 
             for (size_t s = 0; s < test_images.num_samples; ++s) {
-                const double* img = test_images.images + s * test_images.image_size;
-                const double* output = mlp_forward(net, img);
+                const real_t* img = test_images.images + s * test_images.image_size;
+                const real_t* output = mlp_forward(net, img);
                 for (size_t c = 0; c < num_classes; ++c) {
                     test_preds[s * num_classes + c] = output[c];
                 }
@@ -218,12 +246,12 @@ int main(int argc, char* argv[]) {
         print_training_summary(total_params, N, timer_elapsed_sec(total_timer), epoch_records);
 
         close_log();
-        free_matrix(test_preds);
+        free_array(test_preds);
     }
 
     // Cleanup: all ranks free their resources
-    free_matrix(local_grad);
-    free_matrix(global_grad);
+    free_array(local_grad);
+    free_array(global_grad);
     mlp_free(net);
     free_dataset(train_images);
     free_dataset(train_labels);
