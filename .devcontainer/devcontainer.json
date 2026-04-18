@@ -1,0 +1,24 @@
+{
+    "name": "parallel-mlp-mnist",
+    "build": {
+        "context": "..",
+        "dockerfile": "Dockerfile"
+    },
+    "workspaceFolder": "/workspace",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+    "postCreateCommand": "make all",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-python.python"
+            ],
+            "settings": {
+                "C_Cpp.default.compilerPath": "/usr/bin/g++",
+                "C_Cpp.default.cppStandard": "c++17",
+                "C_Cpp.default.includePath": ["${workspaceFolder}/include"],
+                "terminal.integrated.defaultProfile.linux": "bash"
+            }
+        }
+    }
+}

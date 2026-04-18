@@ -353,6 +353,199 @@
                 "clear": true
             },
             "problemMatcher": []
+        },
+
+        // =====================================================================
+        // Docker tasks — run inside containers, no local toolchain required
+        // =====================================================================
+        {
+            "label": "Docker: Build Image",
+            "type": "shell",
+            "command": "docker",
+            "args": ["compose", "build"],
+            "detail": "Build the Docker image (compiles all binaries inside the container)",
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Docker: Rebuild Image",
+            "type": "shell",
+            "command": "docker",
+            "args": ["compose", "build", "--no-cache"],
+            "detail": "Rebuild the Docker image from scratch without layer caching",
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Docker: Download MNIST",
+            "type": "shell",
+            "command": "docker",
+            "args": ["compose", "run", "--rm", "download-data"],
+            "detail": "Download MNIST dataset into a persistent Docker volume (one-time setup)",
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Docker: Train Sequential",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "CONFIG=configs/${input:configFile}.conf NUM_RUNS=${input:numRuns} docker compose run --rm train-seq"
+            ],
+            "detail": "Train sequentially inside Docker (no local toolchain needed)",
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Docker: Train OpenMP",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "CONFIG=configs/${input:configFile}.conf THREADS=${input:numThreads} NUM_RUNS=${input:numRuns} docker compose run --rm train-omp"
+            ],
+            "detail": "Train with OpenMP parallelization inside Docker",
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Docker: Train MPI",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "CONFIG=configs/${input:configFile}.conf PROCS=${input:numProcesses} NUM_RUNS=${input:numRuns} docker compose run --rm train-mpi"
+            ],
+            "detail": "Train with MPI distributed parallelization inside Docker",
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Docker: Run Full Benchmark",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "NUM_RUNS=${input:numRuns} docker compose run --rm benchmark"
+            ],
+            "detail": "Run the complete benchmark suite inside Docker across all configs and parallelism levels",
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Docker: Benchmark OpenMP",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "NUM_RUNS=${input:numRuns} SKIP_MPI=1 docker compose run --rm benchmark"
+            ],
+            "detail": "Run benchmark with sequential + OpenMP inside Docker. Skips MPI.",
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Docker: Benchmark MPI",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "NUM_RUNS=${input:numRuns} SKIP_OMP=1 docker compose run --rm benchmark"
+            ],
+            "detail": "Run benchmark with sequential + MPI inside Docker. Skips OpenMP.",
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Docker: Quick Test Benchmark",
+            "type": "shell",
+            "command": "docker",
+            "args": ["compose", "run", "--rm", "test-benchmark"],
+            "detail": "Run a quick 1-epoch validation benchmark inside Docker to verify everything works",
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Docker: Run Tests",
+            "type": "shell",
+            "command": "docker",
+            "args": ["compose", "run", "--rm", "test"],
+            "detail": "Build and run all unit tests inside Docker (uses the builder stage with compiler)",
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Docker: Plot Results",
+            "type": "shell",
+            "command": "docker",
+            "args": ["compose", "run", "--rm", "plot"],
+            "detail": "Re-generate plots from the most recent results using Python/matplotlib inside Docker",
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
         }
     ]
 }

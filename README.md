@@ -23,6 +23,7 @@ A C++ implementation of a Multi-Layer Perceptron (MLP) trained on the MNIST hand
       - [Quick Validation Benchmark](#quick-validation-benchmark)
     - [Step 8: Visualize Results](#step-8-visualize-results)
   - [VS Code Tasks Reference](#vs-code-tasks-reference)
+  - [Docker Setup (Quick Start)](#docker-setup-quick-start)
 
 ---
 
@@ -43,6 +44,15 @@ Before building and running the project, make sure the following tools are insta
 
 > **Note**: On Linux, replace MS-MPI with OpenMPI or MPICH, and use `scripts/download_mnist.sh` instead of the PowerShell script.
 
+### Alternative: Docker (any OS)
+
+Instead of installing the toolchain manually, you can use Docker to get a fully configured environment with a single command. See [Docker Setup (Quick Start)](#docker-setup-quick-start) below or the full guide at [`docs/docker.md`](docs/docker.md).
+
+| Tool                                                          | Purpose                                                     |
+| ------------------------------------------------------------- | ----------------------------------------------------------- |
+| [Docker](https://docs.docker.com/get-docker/) 20.10+          | Container runtime                                           |
+| [Docker Compose](https://docs.docker.com/compose/install/) v2+ | Service orchestration (bundled with Docker Desktop)         |
+
 ---
 
 ## Project Structure
@@ -51,6 +61,15 @@ Before building and running the project, make sure the following tools are insta
 parallel-mlp-mnist/
 ├── Makefile                    # Build system — targets: all, seq, omp, mpi, test, clean
 ├── README.md                   # This file
+├── Dockerfile                  # Multi-stage Docker build (builder + runtime)
+├── docker-compose.yml          # Compose services for training, benchmarking, plotting
+├── .dockerignore               # Docker build context exclusions
+├── .github/
+│   └── workflows/
+│       └── ci.yml              # GitHub Actions CI pipeline
+├── .devcontainer/
+│   ├── Dockerfile              # Dev Container image (compiler + debugger + runtime)
+│   └── devcontainer.json       # VS Code Dev Container configuration
 ├── configs/                    # Network configuration files
 │   ├── small_network.conf      #   784 → 128 → 10
 │   ├── medium_network.conf     #   784 → 256 → 128 → 10
@@ -60,7 +79,8 @@ parallel-mlp-mnist/
 │   └── mnist/raw/              # MNIST binary files (downloaded in Step 1)
 ├── docs/
 │   ├── project_specification.md
-│   └── architecture.md
+│   ├── architecture.md
+│   └── docker.md               # Full Docker setup and usage guide
 ├── include/                    # C++ header files
 │   ├── activations.h           #   ReLU, Softmax
 │   ├── dataset.h               #   MNIST IDX format loader
@@ -329,3 +349,53 @@ All toolchain actions are available as VS Code tasks. Run them via **Terminal �
 - **Thread count** (OpenMP only): 1–8
 - **Process count** (MPI only): 1–8
 - **Number of runs** (all Train + Full Benchmark tasks): How many times to repeat the training (default: 1)
+
+---
+
+## Docker Setup (Quick Start)
+
+Docker bundles all dependencies (g++, OpenMPI, Python, matplotlib) into a single image, so you don't need to install anything except Docker itself.
+
+### 1. Build the Image
+
+```bash
+docker build -t parallel-mlp .
+```
+
+### 2. Download MNIST (one-time)
+
+```bash
+docker compose run download-data
+```
+
+### 3. Train
+
+```bash
+# Sequential
+docker compose run train-seq
+
+# OpenMP (4 threads)
+THREADS=4 docker compose run train-omp
+
+# MPI (4 processes)
+PROCS=4 docker compose run train-mpi
+```
+
+### 4. Benchmark
+
+```bash
+docker compose run benchmark                    # single run
+NUM_RUNS=5 docker compose run benchmark          # 5 repeated runs
+```
+
+### 5. Customize
+
+Use environment variables to change the configuration, thread/process count, and number of runs:
+
+```bash
+CONFIG=configs/large_network.conf THREADS=8 docker compose run train-omp
+```
+
+Results are written to `results/` on the host via a volume mount.
+
+> For the complete Docker guide — including direct `docker run` usage, Dev Container setup, CI pipeline details, and troubleshooting — see [`docs/docker.md`](docs/docker.md).

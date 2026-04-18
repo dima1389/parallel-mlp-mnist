@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t parallel-mlp .
+
+      - name: Download MNIST dataset
+        run: |
+          docker run --name mnist-download parallel-mlp bash scripts/download_mnist.sh
+          docker cp mnist-download:/app/data/mnist/raw ./data/mnist/raw
+          docker rm mnist-download
+
+      - name: Run unit tests
+        run: |
+          docker run \
+            -v ${{ github.workspace }}/data/mnist/raw:/app/data/mnist/raw:ro \
+            parallel-mlp \
+            make test
+
+      - name: Run quick validation benchmark
+        run: |
+          docker run \
+            -v ${{ github.workspace }}/data/mnist/raw:/app/data/mnist/raw:ro \
+            -v ${{ github.workspace }}/results:/app/results \
+            parallel-mlp \
+            bash scripts/test_benchmark.sh
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: results/
+          retention-days: 30

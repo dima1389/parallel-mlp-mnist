@@ -1,0 +1,33 @@
+# Build artifacts
+build/
+*.o
+*.d
+
+# MNIST data (downloaded at runtime)
+data/mnist/raw/train-*
+data/mnist/raw/t10k-*
+data/mnist/raw/*.gz
+data/mnist/processed/
+
+# Results (generated at runtime)
+results/benchmark_*/
+results/train_*/
+results/logs/*.log
+
+# Version control
+.git/
+.gitignore
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker (avoid recursive context)
+.dockerignore

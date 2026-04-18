@@ -1,0 +1,101 @@
+# Docker Compose for parallel-mlp-mnist
+#
+# Services for downloading data, training, benchmarking, and plotting.
+# All training results are written to ./results/ on the host via bind mount.
+#
+# Quick start:
+#   docker compose run download-data    # one-time MNIST download
+#   docker compose run train-seq        # sequential training
+#   docker compose run benchmark        # full benchmark suite
+#
+# See docs/docker.md for the full usage guide.
+
+x-common: &common
+  build: .
+  volumes:
+    - mnist-data:/app/data/mnist/raw
+    - ./results:/app/results
+    - ./configs:/app/configs
+
+services:
+  # ---------- Data download (one-time) ----------
+  download-data:
+    <<: *common
+    command: bash scripts/download_mnist.sh
+
+  # ---------- Training ----------
+  train-seq:
+    <<: *common
+    environment:
+      - NUM_RUNS=${NUM_RUNS:-1}
+    command: >-
+      bash scripts/run_training.sh seq
+      ${CONFIG:-configs/small_network.conf}
+    depends_on:
+      download-data:
+        condition: service_completed_successfully
+
+  train-omp:
+    <<: *common
+    environment:
+      - OMP_NUM_THREADS=${THREADS:-4}
+      - NUM_RUNS=${NUM_RUNS:-1}
+    command: >-
+      bash scripts/run_training.sh omp
+      ${CONFIG:-configs/small_network.conf}
+      ${THREADS:-4}
+    depends_on:
+      download-data:
+        condition: service_completed_successfully
+
+  train-mpi:
+    <<: *common
+    environment:
+      - NUM_RUNS=${NUM_RUNS:-1}
+    command: >-
+      mpirun --allow-run-as-root
+      -np ${PROCS:-4}
+      ./build/train_mpi
+      --config ${CONFIG:-configs/small_network.conf}
+      --data data/mnist/raw
+    depends_on:
+      download-data:
+        condition: service_completed_successfully
+
+  # ---------- Benchmarks ----------
+  benchmark:
+    <<: *common
+    environment:
+      - NUM_RUNS=${NUM_RUNS:-1}
+      - SKIP_MPI=${SKIP_MPI:-}
+      - SKIP_OMP=${SKIP_OMP:-}
+    command: bash scripts/benchmark.sh
+    depends_on:
+      download-data:
+        condition: service_completed_successfully
+
+  test-benchmark:
+    <<: *common
+    environment:
+      - NUM_RUNS=${NUM_RUNS:-1}
+    command: bash scripts/test_benchmark.sh
+    depends_on:
+      download-data:
+        condition: service_completed_successfully
+
+  # ---------- Unit tests (uses builder stage with compiler) ----------
+  test:
+    build:
+      context: .
+      target: builder
+    volumes:
+      - mnist-data:/app/data/mnist/raw
+    command: make test
+
+  # ---------- Plot results ----------
+  plot:
+    <<: *common
+    command: python3 scripts/plot_results.py
+
+volumes:
+  mnist-data:
