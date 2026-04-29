@@ -24,8 +24,15 @@ This document explains how to build, run, and develop the parallel-mlp-mnist pro
   - [Volume Mounts](#volume-mounts)
   - [Using Docker Directly (without Compose)](#using-docker-directly-without-compose)
   - [VS Code Dev Container](#vs-code-dev-container)
+    - [Setup](#setup)
+    - [What's Included](#whats-included)
+    - [Developing](#developing)
   - [CI / GitHub Actions](#ci--github-actions)
   - [Troubleshooting](#troubleshooting)
+    - [MPI: "Running as root is not allowed"](#mpi-running-as-root-is-not-allowed)
+    - [Volume permission errors](#volume-permission-errors)
+    - [MNIST download fails inside container](#mnist-download-fails-inside-container)
+    - [Slow Docker builds](#slow-docker-builds)
   - [Future Enhancements](#future-enhancements)
 
 ---
@@ -75,26 +82,26 @@ Results appear in the `results/` directory on your host machine.
 The project uses a **multi-stage Docker build** defined in `Dockerfile`:
 
 ```text
-┌─────────────────────────────────┐
-│  Stage 1: builder (ubuntu:22.04)│
-│  ┌────────────────────────────┐ │
-│  │ g++, make, libopenmpi-dev  │ │
-│  │ Compiles: train_seq,       │ │
-│  │   train_omp, train_mpi    │ │
-│  └────────────────────────────┘ │
-└──────────────┬──────────────────┘
-               │ COPY binaries
-               ▼
-┌─────────────────────────────────┐
-│  Stage 2: runtime (ubuntu:22.04)│
-│  ┌────────────────────────────┐ │
-│  │ openmpi-bin, libgomp1,     │ │
-│  │ python3, matplotlib        │ │
-│  │ + compiled binaries        │ │
-│  │ + scripts, configs         │ │
-│  └────────────────────────────┘ │
-│  USER: appuser (non-root)       │
-└─────────────────────────────────┘
+┌──────────────────────────────────┐
+│  Stage 1: builder (ubuntu:22.04) │
+│  ┌────────────────────────────┐  │
+│  │ g++, make, libopenmpi-dev  │  │
+│  │ Compiles: train_seq,       │  │
+│  │   train_omp, train_mpi     │  │
+│  └────────────────────────────┘  │
+└─────────────────┬────────────────┘
+                  │ COPY binaries
+                  ▼
+┌──────────────────────────────────┐
+│  Stage 2: runtime (ubuntu:22.04) │
+│  ┌────────────────────────────┐  │
+│  │ openmpi-bin, libgomp1,     │  │
+│  │ python3, matplotlib        │  │
+│  │ + compiled binaries        │  │
+│  │ + scripts, configs         │  │
+│  └────────────────────────────┘  │
+│  USER: appuser (non-root)        │
+└──────────────────────────────────┘
 ```
 
 **Why multi-stage?** The builder stage includes `g++`, `make`, and `libopenmpi-dev` (~300 MB of headers/libraries) needed only for compilation. The runtime stage contains only what's needed to execute: the compiled binaries, OpenMPI runtime, and Python for plotting. This cuts the final image size significantly.

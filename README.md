@@ -9,6 +9,7 @@ A C++ implementation of a Multi-Layer Perceptron (MLP) trained on the MNIST hand
 - [Parallel MLP Training on MNIST in C/C++ with OpenMP and MPI](#parallel-mlp-training-on-mnist-in-cc-with-openmp-and-mpi)
   - [Table of Contents](#table-of-contents)
   - [Prerequisites](#prerequisites)
+    - [Alternative: Docker (any OS)](#alternative-docker-any-os)
   - [Project Structure](#project-structure)
   - [Network Configurations](#network-configurations)
   - [Step-by-Step Toolchain](#step-by-step-toolchain)
@@ -24,6 +25,11 @@ A C++ implementation of a Multi-Layer Perceptron (MLP) trained on the MNIST hand
     - [Step 8: Visualize Results](#step-8-visualize-results)
   - [VS Code Tasks Reference](#vs-code-tasks-reference)
   - [Docker Setup (Quick Start)](#docker-setup-quick-start)
+    - [1. Build the Image](#1-build-the-image)
+    - [2. Download MNIST (one-time)](#2-download-mnist-one-time)
+    - [3. Train](#3-train)
+    - [4. Benchmark](#4-benchmark)
+    - [5. Customize](#5-customize)
 
 ---
 
@@ -64,12 +70,14 @@ parallel-mlp-mnist/
 ├── Dockerfile                  # Multi-stage Docker build (builder + runtime)
 ├── docker-compose.yml          # Compose services for training, benchmarking, plotting
 ├── .dockerignore               # Docker build context exclusions
-├── .github/
-│   └── workflows/
-│       └── ci.yml              # GitHub Actions CI pipeline
 ├── .devcontainer/
 │   ├── Dockerfile              # Dev Container image (compiler + debugger + runtime)
 │   └── devcontainer.json       # VS Code Dev Container configuration
+├── .github/
+│   └── workflows/
+│       └── ci.yml              # GitHub Actions CI pipeline
+├── .vscode/
+│   └── tasks.json              # VS Code task definitions for all toolchain actions
 ├── configs/                    # Network configuration files
 │   ├── small_network.conf      #   784 → 128 → 10
 │   ├── medium_network.conf     #   784 → 256 → 128 → 10
@@ -112,12 +120,10 @@ parallel-mlp-mnist/
 │   ├── optimizer.cpp           #   SGD weight update
 │   ├── timer.cpp               #   High-resolution timing
 │   └── utils.cpp               #   Config file parsing, CLI argument parsing
-├── tests/                      # Unit tests
-│   ├── test_dataset.cpp        #   MNIST loading, normalization, label range
-│   ├── test_loss.cpp           #   ReLU, softmax, cross-entropy, gradient checks
-│   └── test_mlp.cpp            #   Network lifecycle, forward/backward, loss reduction
-└── .vscode/
-    └── tasks.json              # VS Code task definitions for all toolchain actions
+└── tests/                      # Unit tests
+    ├── test_dataset.cpp        #   MNIST loading, normalization, label range
+    ├── test_loss.cpp           #   ReLU, softmax, cross-entropy, gradient checks
+    └── test_mlp.cpp            #   Network lifecycle, forward/backward, loss reduction
 ```
 
 ---
