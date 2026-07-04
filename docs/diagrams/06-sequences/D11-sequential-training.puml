@@ -1,0 +1,54 @@
+@startuml D11-Sequential-Training
+title D11 — Sequential Training Loop\nOne Epoch Sequence
+
+skinparam defaultFontSize 10
+skinparam sequenceMessageAlign center
+
+participant "main()" as MAIN
+participant "Mini-Batch\nLoop" as BATCH
+participant "mlp_forward()" as FWD
+participant "cross_entropy_loss()" as CEL
+participant "mlp_backward()" as BWD
+participant "mlp_update()\n[SGD]" as UPD
+participant "Test Evaluation" as EVAL
+participant "compute_accuracy()" as ACC
+
+MAIN -> MAIN : "shuffle indices[0..N-1] (seed=42)"
+
+loop "epoch = 1..E"
+    MAIN -> BATCH : "start epoch timer"
+    
+    loop "batch_start = 0, batch_size, 2*batch_size, ..."
+        BATCH -> BATCH : "mlp_zero_gradients(net)"
+
+        loop "si in [batch_start .. batch_end)"
+            BATCH -> FWD : "mlp_forward(net, img[indices[si]])"
+            FWD --> BATCH : "output[10] (softmax probs)"
+            BATCH -> CEL : "cross_entropy_loss(output, label, 10)"
+            CEL --> BATCH : "loss contribution"
+            BATCH -> BWD : "mlp_backward(net, img, label)"
+            BWD --> BATCH : "gradients accumulated in net.dW/db"
+        end
+
+        BATCH -> BATCH : "scale dW/db by 1/actual_batch"
+        BATCH -> UPD : "mlp_update(net, lr)"
+        UPD --> BATCH : "weights updated"
+    end
+
+    BATCH -> EVAL : "stop epoch timer"
+
+    loop "s = 0..test_N"
+        EVAL -> FWD : "mlp_forward(net, test_img[s])"
+        FWD --> EVAL : "test_preds[s][]"
+    end
+
+    EVAL -> ACC : "compute_accuracy(test_preds, test_labels, test_N, 10)"
+    ACC --> EVAL : "accuracy (0-1)"
+    EVAL -> MAIN : "log: Epoch/Loss/Accuracy/Time"
+    MAIN -> MAIN : "store EpochRecord"
+end
+
+MAIN -> MAIN : "write CSV, print SUMMARY block"
+MAIN -> MAIN : "free all memory"
+
+@enduml

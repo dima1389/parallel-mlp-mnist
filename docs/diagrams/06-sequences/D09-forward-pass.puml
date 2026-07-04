@@ -1,0 +1,42 @@
+@startuml D09-Forward-Pass
+title D09 — MLP Forward Pass Sequence\n(Single Sample)
+
+skinparam defaultFontSize 11
+skinparam sequenceMessageAlign center
+
+participant "Caller\n(train loop)" as CALLER
+participant "mlp_forward(net, input)" as FWD
+participant "Layer i\n(hidden, i < N-1)" as HLAYER
+participant "relu()" as RELU
+participant "Layer N-1\n(output)" as OLAYER
+participant "softmax()" as SOFT
+
+CALLER -> FWD : "input[784]"
+activate FWD
+
+loop "for each layer i = 0..N-1"
+    FWD -> HLAYER : "z[j] = bias[j]\n+ Σ_k prev_a[k] × W[k*os+j]"
+    activate HLAYER
+
+    alt "i < N-1  (hidden layer)"
+        HLAYER -> RELU : "relu(z, a, output_size)"
+        RELU --> HLAYER : "a[j] = max(0, z[j])"
+    else "i == N-1  (output layer)"
+        HLAYER -> SOFT : "softmax(z, a, output_size)"
+        SOFT --> HLAYER : "a[j] = exp(z[j]) / Σ exp(z[k])\n(numerically stable)"
+    end
+
+    deactivate HLAYER
+end
+
+FWD --> CALLER : "returns pointer to output layer a[]\n(softmax probability vector [10])"
+deactivate FWD
+
+note over FWD
+  prev_a for layer 0 = the raw input[784].
+  prev_a for layer i = layer[i-1].a[].
+  No memory allocation during inference —
+  z[] and a[] buffers are pre-allocated in Layer.
+end note
+
+@enduml

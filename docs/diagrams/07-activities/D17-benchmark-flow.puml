@@ -1,0 +1,66 @@
+@startuml D17-Benchmark-Flow
+title D17 — Benchmark Pipeline Activity\n(benchmark.sh)
+
+skinparam defaultFontSize 11
+skinparam activityBackgroundColor #F0F0F0
+
+start
+
+:Read env vars:\nNUM_RUNS, SKIP_OMP, SKIP_MPI;
+:Create timestamped run directory:\nresults/benchmark_<YYYYMMDD_HHMMSS>/;
+:Initialise summary.csv with header;
+:Initialise all_epochs.csv with header;
+
+repeat
+    :cfg = next config\n(small / medium / large);
+
+    repeat
+        :run = 1..NUM_RUNS;
+
+        :--- Sequential baseline ---\ntrain_seq --config cfg --epoch-csv …;
+        :append_summary_row("sequential", 1, run);
+        :append_epoch_data(epoch_csv, …);
+
+        if (SKIP_OMP != 1) then (run OMP)
+            repeat
+                :t = 1..8 (OMP threads);
+                :train_omp --config cfg --threads t --epoch-csv …;
+                :append_summary_row("openmp", t, run);
+                :append_epoch_data(epoch_csv, …);
+            repeat while (t <= 8) is (yes)
+            ->no;
+        endif
+
+        if (SKIP_MPI != 1) then (run MPI)
+            repeat
+                :np = 1..8 (MPI procs);
+                :mpiexec -np np train_mpi --config cfg --epoch-csv …;
+                :append_summary_row("mpi", np, run);
+                :append_epoch_data(epoch_csv, …);
+            repeat while (np <= 8) is (yes)
+            ->no;
+        endif
+
+    repeat while (run <= NUM_RUNS) is (yes)
+    ->no;
+
+repeat while (more configs?) is (yes)
+->no;
+
+:Print "Results saved to …";
+
+if (python available?) then (yes)
+    :python scripts/plot_results.py <run_dir>;
+    :Generate speedup bar charts (PNG);
+    :Generate throughput scaling charts (PNG);
+    :Generate loss curves (PNG);
+    :Generate accuracy curves (PNG);
+    :Generate epoch time box plots (PNG);
+    :Print ASCII summary tables;
+else (no)
+    :Echo "Python not found — skipping plots";
+endif
+
+stop
+
+@enduml

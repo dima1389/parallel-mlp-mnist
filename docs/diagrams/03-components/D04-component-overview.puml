@@ -1,0 +1,88 @@
+@startuml D04-Component-Overview
+title D04 — Component Overview\n(C4 Component Level)
+
+skinparam component {
+    BackgroundColor<<entry>> #DAE8FC
+    BorderColor<<entry>> #6C8EBF
+    BackgroundColor<<core>> #D5E8D4
+    BorderColor<<core>> #82B366
+    BackgroundColor<<util>> #FFF2CC
+    BorderColor<<util>> #D6B656
+}
+
+skinparam defaultFontSize 11
+
+package "Training Entry Points" <<entry>> {
+    [train_sequential\nsrc/train_sequential.cpp] as SEQ <<entry>>
+    [train_openmp\nsrc/train_openmp.cpp] as OMP <<entry>>
+    [train_mpi\nsrc/train_mpi.cpp] as MPI <<entry>>
+}
+
+package "Core Neural Network" <<core>> {
+    [mlp\nsrc/mlp.cpp] as MLP <<core>>
+    note right of MLP
+        Provides:
+        mlp_create()
+        mlp_forward()
+        mlp_backward()
+        mlp_update()
+        mlp_zero_gradients()
+        mlp_accumulate_gradients()
+        mlp_total_params()
+        mlp_free()
+    end note
+    [activations\nsrc/activations.cpp] as ACT <<core>>
+    [loss\nsrc/loss.cpp] as LOSS <<core>>
+    [optimizer\nsrc/optimizer.cpp] as OPT <<core>>
+    [metrics\nsrc/metrics.cpp] as MET <<core>>
+}
+
+package "Infrastructure" <<util>> {
+    [dataset\nsrc/dataset.cpp] as DS <<util>>
+    [timer\nsrc/timer.cpp] as TMR <<util>>
+    [utils\nsrc/utils.cpp] as UTL <<util>>
+}
+
+package "Unit Tests\n(tests/)" <<entry>> {
+    [test_mlp] as TMLP <<entry>>
+    [test_dataset] as TDS <<entry>>
+    [test_loss] as TLOSS <<entry>>
+    [test_metrics] as TMET <<entry>>
+    [test_optimizer] as TOPT <<entry>>
+    [test_utils] as TUTL <<entry>>
+}
+
+SEQ --> MLP
+SEQ --> DS
+SEQ --> MET
+SEQ --> TMR
+SEQ --> UTL
+
+OMP --> MLP
+OMP --> DS
+OMP --> MET
+OMP --> TMR
+OMP --> UTL
+
+MPI --> MLP
+MPI --> DS
+MPI --> MET
+MPI --> TMR
+MPI --> UTL
+
+MLP --> ACT
+MLP --> LOSS
+MLP --> OPT
+MLP --> UTL
+
+DS --> UTL
+
+TMLP --> MLP
+TDS --> DS
+TLOSS --> LOSS
+TLOSS --> ACT
+TMET --> MET
+TOPT --> OPT
+TUTL --> UTL
+
+@enduml

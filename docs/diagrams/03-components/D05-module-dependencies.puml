@@ -1,0 +1,85 @@
+@startuml D05-Module-Dependencies
+title D05 — Module Include Dependencies\n(Header-level)
+
+skinparam defaultFontSize 11
+left to right direction
+
+rectangle "types.h\n(real_t alias)" as TYPES #LightYellow
+rectangle "activations.h" as ACTH #D5E8D4
+rectangle "loss.h" as LOSSH #D5E8D4
+rectangle "optimizer.h" as OPTH #D5E8D4
+rectangle "metrics.h" as METH #D5E8D4
+rectangle "dataset.h" as DSH #DAE8FC
+rectangle "mlp.h" as MLPH #DAE8FC
+rectangle "timer.h" as TMRH #E1D5E7
+rectangle "utils.h" as UTLH #E1D5E7
+
+rectangle "train_sequential.cpp" as SEQCPP #F8CECC
+rectangle "train_openmp.cpp" as OMPCPP #F8CECC
+rectangle "train_mpi.cpp" as MPICPP #F8CECC
+
+rectangle "mlp.cpp\n(includes activations,\nloss, optimizer, utils)" as MLPCPP #D5E8D4
+rectangle "dataset.cpp" as DSCPP #DAE8FC
+rectangle "activations.cpp" as ACTCPP #D5E8D4
+rectangle "loss.cpp" as LOSSCPP #D5E8D4
+rectangle "optimizer.cpp" as OPTCPP #D5E8D4
+rectangle "metrics.cpp" as METCPP #D5E8D4
+rectangle "timer.cpp" as TMRCPP #E1D5E7
+rectangle "utils.cpp" as UTLCPP #E1D5E7
+
+' Header dependencies (includes types.h)
+ACTH --> TYPES
+LOSSH --> TYPES
+OPTH --> TYPES
+METH --> TYPES
+DSH --> TYPES
+MLPH --> TYPES
+UTLH --> TYPES
+
+MLPH --> DSH : uses Dataset\n(indirectly)
+
+' Source files include their headers
+ACTCPP --> ACTH
+LOSSCPP --> LOSSH
+OPTCPP --> OPTH
+METCPP --> METH
+DSCPP --> DSH
+MLPCPP --> MLPH
+MLPCPP --> ACTH
+MLPCPP --> LOSSH
+MLPCPP --> OPTH
+MLPCPP --> UTLH
+TMRCPP --> TMRH
+UTLCPP --> UTLH
+
+' Entry points include all needed headers
+SEQCPP --> MLPH
+SEQCPP --> DSH
+SEQCPP --> LOSSH
+SEQCPP --> METH
+SEQCPP --> TMRH
+SEQCPP --> UTLH
+
+OMPCPP --> MLPH
+OMPCPP --> DSH
+OMPCPP --> LOSSH
+OMPCPP --> METH
+OMPCPP --> TMRH
+OMPCPP --> UTLH
+
+MPICPP --> MLPH
+MPICPP --> DSH
+MPICPP --> LOSSH
+MPICPP --> METH
+MPICPP --> TMRH
+MPICPP --> UTLH
+
+legend right
+  Yellow  — central type alias
+  Green   — neural network / math
+  Blue    — data / model
+  Purple  — infrastructure
+  Red     — entry-point executables
+end legend
+
+@enduml

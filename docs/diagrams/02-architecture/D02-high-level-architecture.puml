@@ -1,0 +1,89 @@
+@startuml D02-High-Level-Architecture
+title D02 — High-Level Architecture\nParallel MLP MNIST Trainer
+
+skinparam rectangle {
+    BackgroundColor<<entry>> #DAE8FC
+    BorderColor<<entry>> #6C8EBF
+    BackgroundColor<<lib>> #D5E8D4
+    BorderColor<<lib>> #82B366
+    BackgroundColor<<data>> #FFF2CC
+    BorderColor<<data>> #D6B656
+    BackgroundColor<<infra>> #F8CECC
+    BorderColor<<infra>> #B85450
+    BackgroundColor<<tool>> #E1D5E7
+    BorderColor<<tool>> #9673A6
+}
+
+skinparam defaultFontSize 12
+
+package "Training Entry Points\n(src/train_*.cpp)" <<entry>> {
+    rectangle "train_sequential\n[Single-threaded SGD]" as SEQ <<entry>>
+    rectangle "train_openmp\n[OpenMP / shared-memory]" as OMP <<entry>>
+    rectangle "train_mpi\n[MPI / distributed]" as MPI <<entry>>
+}
+
+package "Core Library\n(src/*.cpp + include/*.h)" <<lib>> {
+    rectangle "mlp\n[Network create/forward/\nbackward/update]" as MLP <<lib>>
+    rectangle "activations\n[ReLU, Softmax]" as ACT <<lib>>
+    rectangle "loss\n[Cross-entropy loss\n& gradient]" as LOSS <<lib>>
+    rectangle "optimizer\n[SGD update]" as OPT <<lib>>
+    rectangle "dataset\n[MNIST IDX loader\n& normaliser]" as DS <<lib>>
+    rectangle "metrics\n[Accuracy]" as MET <<lib>>
+    rectangle "timer\n[Wall-clock timing]" as TMR <<lib>>
+    rectangle "utils\n[Config parser, logging,\nmemory alloc]" as UTL <<lib>>
+}
+
+package "Data" <<data>> {
+    rectangle "MNIST IDX Files\ndata/mnist/raw/" as MNISTF <<data>>
+    rectangle "Config Files\nconfigs/*.conf" as CONF <<data>>
+    rectangle "results/\n(CSV, logs, plots)" as RESULTS <<data>>
+}
+
+package "Tooling" <<tool>> {
+    rectangle "Makefile\n[Build system]" as MAKE <<tool>>
+    rectangle "benchmark.sh\n[Benchmark runner]" as BENCH <<tool>>
+    rectangle "plot_results.py\n[Visualisation]" as PLOT <<tool>>
+}
+
+package "Infrastructure" <<infra>> {
+    rectangle "Docker / Compose\n[Containerisation]" as DOCK <<infra>>
+    rectangle "GitHub Actions\n[CI pipeline]" as CI <<infra>>
+}
+
+SEQ --> MLP
+OMP --> MLP
+MPI --> MLP
+MLP --> ACT
+MLP --> LOSS
+MLP --> OPT
+SEQ --> DS
+OMP --> DS
+MPI --> DS
+SEQ --> MET
+OMP --> MET
+MPI --> MET
+SEQ --> TMR
+OMP --> TMR
+MPI --> TMR
+SEQ --> UTL
+OMP --> UTL
+MPI --> UTL
+DS --> MNISTF
+SEQ --> CONF
+OMP --> CONF
+MPI --> CONF
+SEQ --> RESULTS
+OMP --> RESULTS
+MPI --> RESULTS
+BENCH --> SEQ
+BENCH --> OMP
+BENCH --> MPI
+BENCH --> RESULTS
+PLOT --> RESULTS
+MAKE --> SEQ
+MAKE --> OMP
+MAKE --> MPI
+CI --> DOCK
+DOCK --> MAKE
+
+@enduml

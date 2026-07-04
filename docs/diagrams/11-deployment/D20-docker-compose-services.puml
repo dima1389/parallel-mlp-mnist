@@ -1,0 +1,81 @@
+@startuml D20-Docker-Compose-Services
+title D20 — Docker Compose Services\n(docker-compose.yml)
+
+skinparam defaultFontSize 11
+skinparam node {
+    BackgroundColor #DAE8FC
+    BorderColor #6C8EBF
+}
+skinparam database {
+    BackgroundColor #FFF2CC
+    BorderColor #D6B656
+}
+skinparam rectangle {
+    BackgroundColor<<vol>> #D5E8D4
+    BorderColor<<vol>> #82B366
+    BackgroundColor<<svc>> #DAE8FC
+    BorderColor<<svc>> #6C8EBF
+    BackgroundColor<<build>> #E1D5E7
+    BorderColor<<build>> #9673A6
+}
+
+rectangle "Docker Image\n(parallel-mlp:latest)\nbuild context: ." as IMG #F0F0F0
+
+rectangle "Volumes" <<vol>> {
+    database "mnist-data\n(named Docker volume)\n/app/data/mnist/raw" as MNISTVOL <<vol>>
+    database "Host ./results\n(bind mount)\n/app/results" as RESVOL <<vol>>
+    database "Host ./configs\n(bind mount)\n/app/configs" as CONFVOL <<vol>>
+}
+
+rectangle "download-data\nbash scripts/download_mnist.sh\n[one-time]" as DLSVC <<svc>>
+rectangle "train-seq\nbash scripts/run_training.sh seq\nenv: NUM_RUNS" as SEQSVC <<svc>>
+rectangle "train-omp\nbash scripts/run_training.sh omp\nenv: THREADS, NUM_RUNS" as OMPSVC <<svc>>
+rectangle "train-mpi\nmpirun --allow-run-as-root -np \$PROCS\ntrain_mpi --config …\nenv: NUM_RUNS" as MPISVC <<svc>>
+rectangle "benchmark\nbash scripts/benchmark.sh\nenv: NUM_RUNS, SKIP_OMP, SKIP_MPI" as BENCHSVC <<svc>>
+rectangle "test-benchmark\nbash scripts/test_benchmark.sh\nenv: NUM_RUNS" as TBSVC <<svc>>
+rectangle "test\nbuild target: builder stage\nmake test\n[uses compiler image]" as TESTSVC <<build>>
+rectangle "plot\npython3 scripts/plot_results.py" as PLOTSVC <<svc>>
+
+IMG --> DLSVC
+IMG --> SEQSVC
+IMG --> OMPSVC
+IMG --> MPISVC
+IMG --> BENCHSVC
+IMG --> TBSVC
+IMG --> PLOTSVC
+
+DLSVC --> MNISTVOL : "writes MNIST files"
+SEQSVC ..> DLSVC   : "depends_on\n(completed_successfully)"
+OMPSVC ..> DLSVC   : "depends_on"
+MPISVC ..> DLSVC   : "depends_on"
+BENCHSVC ..> DLSVC : "depends_on"
+TBSVC ..> DLSVC    : "depends_on"
+
+MNISTVOL --> SEQSVC : "read MNIST"
+MNISTVOL --> OMPSVC
+MNISTVOL --> MPISVC
+MNISTVOL --> BENCHSVC
+MNISTVOL --> TBSVC
+
+RESVOL --> SEQSVC   : "write results"
+RESVOL --> OMPSVC
+RESVOL --> MPISVC
+RESVOL --> BENCHSVC
+RESVOL --> TBSVC
+RESVOL --> PLOTSVC  : "read + write plots"
+
+CONFVOL --> SEQSVC  : "read configs"
+CONFVOL --> OMPSVC
+CONFVOL --> MPISVC
+CONFVOL --> BENCHSVC
+
+TESTSVC --> MNISTVOL : "read MNIST (test data)"
+
+note right of MPISVC
+  Uses --allow-run-as-root because
+  the container runs as root by default;
+  appuser is only used when running
+  docker run directly.
+end note
+
+@enduml

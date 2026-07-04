@@ -1,0 +1,98 @@
+@startuml D06-Data-Structures
+title D06 — Core Data Structures\n(C++ Structs)
+
+skinparam classBackgroundColor #FAFAFA
+skinparam classBorderColor #555555
+skinparam defaultFontSize 11
+
+class Layer {
+    + weights : real_t*\n  // [input_size × output_size], row-major
+    + biases  : real_t*\n  // [output_size]
+    + z       : real_t*\n  // pre-activation  [output_size]
+    + a       : real_t*\n  // post-activation [output_size]
+    + dW      : real_t*\n  // weight gradients [input_size × output_size]
+    + db      : real_t*\n  // bias gradients   [output_size]
+    + delta   : real_t*\n  // error signal for backprop [output_size]
+    + relu_d  : real_t*\n  // ReLU derivative buffer    [output_size]
+    + input_size  : size_t
+    + output_size : size_t
+}
+
+class MLP {
+    + layers     : vector<Layer>
+    + num_layers : size_t
+    + input_size : size_t
+    + output_size: size_t
+    --
+    + mlp_create(layer_sizes)
+    + mlp_forward(input) : const real_t*
+    + mlp_backward(input, label)
+    + mlp_update(learning_rate)
+    + mlp_zero_gradients()
+    + mlp_accumulate_gradients(source)
+    + mlp_total_params() : size_t
+    + mlp_free()
+}
+
+class Dataset {
+    + images      : real_t*\n  // [num_samples × image_size]
+    + labels      : uint8_t*\n // [num_samples]
+    + num_samples : size_t
+    + image_size  : size_t\n   // 784 for MNIST 28×28
+    --
+    + load_mnist_images(filepath) : Dataset
+    + load_mnist_labels(filepath) : Dataset
+    + free_dataset()
+}
+
+class Config {
+    + hidden_layers  : vector<int>\n  // e.g., {256, 128}
+    + epochs         : int
+    + learning_rate  : double
+    + batch_size     : int
+    --
+    + load_config(filepath) : Config
+}
+
+class Timer {
+    + start_time : chrono::time_point
+    + stop_time  : chrono::time_point
+    --
+    + timer_start()
+    + timer_stop()
+    + timer_elapsed_sec() : double
+}
+
+class EpochRecord {
+    + epoch               : int
+    + train_loss          : double
+    + test_accuracy       : double
+    + epoch_time_sec      : double
+    + cumulative_time_sec : double
+}
+
+MLP "1" *-- "num_layers" Layer : contains >
+MLP ..> EpochRecord : training loop\nproduces >
+Config ..> MLP       : configures >
+Dataset ..> MLP      : supplies input >
+
+note right of Layer
+  Hidden layers: ReLU activation
+  Output layer: Softmax activation
+  Weights stored row-major:
+    W[k][j] = weights[k*output_size + j]
+end note
+
+note right of MLP
+  OpenMP mode: one MLP per thread;
+  thread nets share weights/biases
+  with the master (read-only during
+  forward/backward), but own private
+  gradient buffers.
+  
+  MPI mode: every rank owns a full
+  independent copy; gradients summed
+  via MPI_Allreduce each mini-batch.
+end note
+
+@enduml

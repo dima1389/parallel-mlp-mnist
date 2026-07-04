@@ -1,0 +1,66 @@
+@startuml D12-OpenMP-Gradient-Aggregation
+title D12 — OpenMP Gradient Aggregation\nPer Mini-Batch (T threads)
+
+skinparam defaultFontSize 10
+skinparam sequenceMessageAlign center
+
+participant "Main Thread" as MAIN
+participant "Thread 0\n(local_net[0])" as T0
+participant "Thread 1\n(local_net[1])" as T1
+participant "Thread T-1\n(local_net[T-1])" as TN
+participant "Master Net\n(net)" as MASTER
+
+note over MAIN
+  Master net holds authoritative weights/biases.
+  Thread-local nets share pointers to master's
+  weights/biases (read-only during forward/backward)
+  but own independent z/a/delta/relu_d/dW/db.
+end note
+
+MAIN -> T0 : "mlp_zero_gradients(thread_nets[0])"
+MAIN -> T1 : "mlp_zero_gradients(thread_nets[1])"
+MAIN -> TN : "mlp_zero_gradients(thread_nets[T-1])"
+
+== #pragma omp parallel for reduction(+:batch_loss) ==
+
+MAIN -> T0 : "samples [start .. start+end/T)"
+activate T0
+T0 -> T0 : "mlp_forward(local_net)"
+T0 -> T0 : "cross_entropy_loss()"
+T0 -> T0 : "mlp_backward(local_net)"
+T0 --> MAIN : "batch_loss += local"
+deactivate T0
+
+MAIN -> T1 : "samples [start+end/T .. start+2*end/T)"
+activate T1
+T1 -> T1 : "mlp_forward(local_net)"
+T1 -> T1 : "cross_entropy_loss()"
+T1 -> T1 : "mlp_backward(local_net)"
+T1 --> MAIN : "batch_loss += local"
+deactivate T1
+
+MAIN -> TN : "samples [...]"
+activate TN
+TN -> TN : "mlp_forward(local_net)"
+TN -> TN : "cross_entropy_loss()"
+TN -> TN : "mlp_backward(local_net)"
+TN --> MAIN : "batch_loss += local"
+deactivate TN
+
+== Gradient aggregation (sequential) ==
+
+MAIN -> MASTER : "mlp_zero_gradients(net)"
+MAIN -> MASTER : "mlp_accumulate_gradients(net, thread_nets[0])"
+MAIN -> MASTER : "mlp_accumulate_gradients(net, thread_nets[1])"
+MAIN -> MASTER : "mlp_accumulate_gradients(net, thread_nets[T-1])"
+MAIN -> MASTER : "scale dW/db by 1/actual_batch"
+MAIN -> MASTER : "mlp_update(net, lr)"
+
+note over MAIN
+  After update, master net's weights/biases
+  are updated. Thread-local nets automatically
+  see the new weights via their shared pointers.
+  Next batch starts with fresh zero gradients.
+end note
+
+@enduml

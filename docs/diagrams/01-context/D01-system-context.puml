@@ -1,0 +1,48 @@
+@startuml D01-System-Context
+title D01 — System Context\nParallel MLP MNIST Trainer
+
+!define RECTANGLE class
+
+skinparam rectangle {
+    BackgroundColor<<external>> #E8E8E8
+    BorderColor<<external>> #999999
+    BackgroundColor<<system>> #DAE8FC
+    BorderColor<<system>> #6C8EBF
+    BackgroundColor<<actor>> #D5E8D4
+    BorderColor<<actor>> #82B366
+}
+
+skinparam defaultFontSize 13
+skinparam wrapWidth 200
+
+actor "Developer / Researcher\n(User)" as User <<actor>>
+
+rectangle "parallel-mlp-mnist\n[C++ Training System]" as System <<system>> {
+    note right of System
+        Three training modes:
+        Sequential, OpenMP, MPI.
+        Benchmarks and visualises
+        training speedup on MNIST.
+    end note
+}
+
+rectangle "MNIST Dataset\n(Yann LeCun / Remote Servers)\n[External Data Source]" as MNIST <<external>>
+rectangle "Docker Hub / OCI Registry\n[Container Registry]" as DockerHub <<external>>
+rectangle "GitHub / GitHub Actions\n[Source Control + CI]" as GitHub <<external>>
+rectangle "Host Filesystem\n[results/, data/, configs/]" as HostFS <<external>>
+
+User --> System : "configure network\nselect parallelism\nrun training"
+System --> MNIST : "HTTP download (IDX files)"
+System --> HostFS : "write CSV results,\nepoch logs, PNG charts"
+System --> GitHub : "push code,\ntrigger CI pipeline"
+GitHub --> System : "clone + build + test\n(GitHub Actions runner)"
+System --> DockerHub : "pull base images\n(ubuntu:22.04)"
+User <-- System : "stdout epoch logs,\nbenchmark CSVs,\nspeedup charts"
+
+legend right
+  <<actor>>   Human actor
+  <<system>>  This system
+  <<external>> External system / service
+end legend
+
+@enduml
