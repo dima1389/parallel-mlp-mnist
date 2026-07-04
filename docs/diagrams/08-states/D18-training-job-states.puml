@@ -59,8 +59,8 @@ Saving --> Cleanup : saved
 Failed --> Cleanup : (partial cleanup)
 
 state Cleanup {
-    [*] --> FreememoryGPU
-    FreememoryGPU --> ClosingLog
+    [*] --> FreeMemory
+    FreeMemory --> ClosingLog
     ClosingLog --> [*]
 }
 
