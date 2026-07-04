@@ -1,0 +1,62 @@
+@startuml D21-GitHub-Actions-Pipeline
+title D21 — GitHub Actions CI Pipeline\n(.github/workflows/ci.yml)
+
+skinparam defaultFontSize 11
+skinparam activityBackgroundColor #DAE8FC
+skinparam activityBorderColor #6C8EBF
+
+|Trigger|
+start
+:push to main\nOR pull_request to main;
+
+|GitHub Actions Runner\n(ubuntu-latest)|
+:actions/checkout@v4\n(clone repository);
+
+:docker build -t parallel-mlp .\n[Multi-stage build:\n Stage 1 → compile all binaries\n Stage 2 → slim runtime image];
+
+note right
+  Builder stage compiles:
+  - build/train_seq
+  - build/train_omp
+  - build/train_mpi
+  using g++ and mpicxx.
+end note
+
+:Download MNIST Dataset\ndocker run parallel-mlp\n  bash scripts/download_mnist.sh\ndocker cp mnist-download:/app/data/mnist/raw\n  ./data/mnist/raw;
+
+note right
+  IDX binary files downloaded
+  into GitHub runner's workspace.
+end note
+
+:Run Unit Tests\ndocker run -v …/data/mnist/raw:/app/data/mnist/raw:ro\n  parallel-mlp make test;
+
+note right
+  Runs: test_dataset, test_loss,
+  test_metrics, test_mlp,
+  test_optimizer, test_utils.
+  Exit code 1 fails the job.
+end note
+
+:Run Quick Validation Benchmark\ndocker run -v …data:ro -v …/results:/app/results\n  parallel-mlp bash scripts/test_benchmark.sh;
+
+note right
+  1-epoch benchmark:
+  Sequential + OpenMP(2) + MPI(2)
+  on test_benchmark.conf.
+  Output: results/tables/benchmark_test.csv
+end note
+
+|Upload Artifact|
+:actions/upload-artifact@v4\nname: benchmark-results\npath: results/\nretention-days: 30;
+
+note right
+  Runs even if previous steps fail
+  (if: always()).
+  Allows inspection of partial results
+  on failure.
+end note
+
+stop
+
+@enduml

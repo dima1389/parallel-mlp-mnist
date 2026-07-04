@@ -1,0 +1,78 @@
+@startuml D18-Training-Job-States
+title D18 — Training Job State Machine\n(Single Binary Invocation)
+
+skinparam defaultFontSize 11
+skinparam state {
+    BackgroundColor #DAE8FC
+    BorderColor #6C8EBF
+    BackgroundColor<<terminal>> #D5E8D4
+    BorderColor<<terminal>> #82B366
+    BackgroundColor<<error>> #F8CECC
+    BorderColor<<error>> #B85450
+}
+
+[*] --> Initialising : binary launched
+
+state Initialising {
+    [*] --> ParsingArgs
+    ParsingArgs --> LoadingConfig : args valid
+    LoadingConfig --> OpeningLog : config loaded
+    OpeningLog --> LoadingData : (log optional)
+    LoadingData --> BuildingNetwork : MNIST loaded
+    BuildingNetwork --> [*] : MLP created
+}
+
+Initialising --> Training : init success
+Initialising --> Failed <<error>> : missing --config\nor file not found
+
+state Training {
+    [*] --> EpochLoop
+    state EpochLoop {
+        [*] --> Shuffling
+        Shuffling --> BatchLoop
+        state BatchLoop {
+            [*] --> ZeroGradients
+            ZeroGradients --> ForwardPass
+            ForwardPass --> BackwardPass
+            BackwardPass --> GradientAggregation
+            GradientAggregation --> SGDUpdate
+            SGDUpdate --> ZeroGradients : next batch
+            SGDUpdate --> [*] : batch done
+        }
+        BatchLoop --> TestEvaluation
+        TestEvaluation --> Logging
+        Logging --> Shuffling : next epoch
+        Logging --> [*] : all epochs done
+    }
+}
+
+Training --> Saving : all epochs complete
+Training --> Failed <<error>> : I/O error\nor OOM
+
+state Saving {
+    [*] --> WritingCSV
+    WritingCSV --> PrintingSummary
+    PrintingSummary --> [*]
+}
+
+Saving --> Cleanup : saved
+Failed --> Cleanup : (partial cleanup)
+
+state Cleanup {
+    [*] --> FreememoryGPU
+    FreememoryGPU --> ClosingLog
+    ClosingLog --> [*]
+}
+
+Cleanup --> Done <<terminal>> : exit 0
+Failed --> Done <<terminal>> : exit 1
+
+Done : exit code returned to shell\n(benchmark.sh captures output)
+
+note right of GradientAggregation
+  Sequential: no-op (gradients already in net)
+  OpenMP:     mlp_accumulate_gradients() per thread
+  MPI:        MPI_Allreduce() across ranks
+end note
+
+@enduml

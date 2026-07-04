@@ -1,0 +1,90 @@
+@startuml D03-Layered-Architecture
+title D03 — Layered Architecture\nParallel MLP MNIST Trainer
+
+skinparam defaultFontSize 12
+skinparam rectangle {
+    BackgroundColor<<L1>> #DAE8FC
+    BorderColor<<L1>> #6C8EBF
+    BackgroundColor<<L2>> #D5E8D4
+    BorderColor<<L2>> #82B366
+    BackgroundColor<<L3>> #FFF2CC
+    BorderColor<<L3>> #D6B656
+    BackgroundColor<<L4>> #F8CECC
+    BorderColor<<L4>> #B85450
+    BackgroundColor<<L5>> #E1D5E7
+    BorderColor<<L5>> #9673A6
+}
+
+rectangle "Layer 1 — Entry Points (Executables)" <<L1>> {
+    rectangle "train_sequential" as SEQ <<L1>>
+    rectangle "train_openmp" as OMP <<L1>>
+    rectangle "train_mpi" as MPI <<L1>>
+}
+
+rectangle "Layer 2 — Neural Network (MLP)" <<L2>> {
+    rectangle "mlp\n(create / forward / backward / update / gradient ops)" as MLPMOD <<L2>>
+}
+
+rectangle "Layer 3 — Mathematical Primitives" <<L3>> {
+    rectangle "activations\n(relu, relu_derivative, softmax)" as ACTMOD <<L3>>
+    rectangle "loss\n(cross_entropy_loss, softmax_gradient)" as LOSSMOD <<L3>>
+    rectangle "optimizer\n(sgd_update)" as OPTMOD <<L3>>
+    rectangle "metrics\n(compute_accuracy)" as METMOD <<L3>>
+}
+
+rectangle "Layer 4 — I/O and Infrastructure" <<L4>> {
+    rectangle "dataset\n(load_mnist_images, load_mnist_labels)" as DSMOD <<L4>>
+    rectangle "timer\n(timer_start, timer_stop, elapsed)" as TMRMOD <<L4>>
+    rectangle "utils\n(alloc, he_init, load_config, log_printf, CSV write)" as UTLMOD <<L4>>
+}
+
+rectangle "Layer 5 — External / OS / MPI Runtime" <<L5>> {
+    rectangle "MNIST IDX Files\n(filesystem)" as FS <<L5>>
+    rectangle "OpenMP Runtime\n(libgomp)" as OMPRT <<L5>>
+    rectangle "MPI Runtime\n(OpenMPI / MS-MPI)" as MPIRT <<L5>>
+    rectangle "C++ STL + libc\n(std::chrono, memset, …)" as STL <<L5>>
+}
+
+SEQ -down-> MLPMOD
+OMP -down-> MLPMOD
+MPI -down-> MLPMOD
+
+SEQ -down-> DSMOD
+OMP -down-> DSMOD
+MPI -down-> DSMOD
+
+SEQ -down-> UTLMOD
+OMP -down-> UTLMOD
+MPI -down-> UTLMOD
+
+MLPMOD -down-> ACTMOD
+MLPMOD -down-> LOSSMOD
+MLPMOD -down-> OPTMOD
+SEQ -down-> METMOD
+OMP -down-> METMOD
+MPI -down-> METMOD
+
+DSMOD -down-> FS
+UTLMOD -down-> STL
+TMRMOD -down-> STL
+OMP -down-> OMPRT
+MPI -down-> MPIRT
+
+note top of SEQ
+  Single-threaded mini-batch SGD.
+  Baseline for speedup measurement.
+end note
+
+note top of OMP
+  Per-thread local networks;
+  gradient aggregation via
+  mlp_accumulate_gradients().
+end note
+
+note top of MPI
+  Data-parallel across ranks;
+  gradient sync via MPI_Allreduce
+  once per mini-batch.
+end note
+
+@enduml

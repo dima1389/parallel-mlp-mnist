@@ -1,0 +1,84 @@
+@startuml D16-MPI-Training-Flow
+title D16 — MPI Training Activity Flow\n(Swimlane: Rank 0 vs Other Ranks)
+
+skinparam defaultFontSize 10
+
+|Rank 0 (master reporter)|
+start
+:MPI_Init();
+:MPI_Comm_rank → rank=0\nMPI_Comm_size → world_size;
+:Parse CLI args;
+:open_log (rank 0 only);
+:load_config;
+
+|All Ranks (including Rank 0)|
+:load full MNIST dataset\n(each rank reads independently);
+:mlp_create(net) with same seed=42\n→ identical initial weights;
+:alloc local_grad[], global_grad[];
+
+|Rank 0 (master reporter)|
+:alloc test_preds (rank 0 only);
+:timer_start(total_timer);
+
+|All Ranks (including Rank 0)|
+repeat
+    |Rank 0 (master reporter)|
+    :timer_start(epoch_timer);
+
+    |All Ranks (including Rank 0)|
+    :shuffle indices (same seed=42 → same order);
+    :local_loss = 0;
+
+    repeat
+        :compute local shard:\nlocal_offset = batch_start + rank * local_bs;
+        :mlp_zero_gradients(net);
+
+        repeat
+            :mlp_forward(net, img[idx]);
+            :local_loss += cross_entropy_loss();
+            :mlp_backward(net, img, label);
+        repeat while (more local samples?) is (yes)
+        ->no;
+
+        :pack dW/db into local_grad[];
+        :MPI_Allreduce(\n  local_grad → global_grad,\n  MPI_SUM, all ranks\n);
+        note right
+          One Allreduce per mini-batch.
+          Communication bottleneck.
+        end note
+        :unpack global_grad into dW/db;
+        :scale by 1/actual_batch;
+        :mlp_update(net, lr);
+
+    repeat while (more batches?) is (yes)
+    ->no;
+
+    :MPI_Reduce(local_loss → global_loss,\nMPI_SUM, root=0);
+
+    |Rank 0 (master reporter)|
+    :timer_stop(epoch_timer);
+    :global_loss /= N;
+    :test evaluation (sequential, rank 0 only);
+    :compute_accuracy();
+    :log_printf("Epoch …");
+    :push EpochRecord;
+
+    |All Ranks (including Rank 0)|
+repeat while (epoch < E?) is (yes)
+->no;
+
+    |Rank 0 (master reporter)|
+:timer_stop(total_timer);
+:write CSV, print SUMMARY;
+:close_log;
+:free test_preds;
+
+|All Ranks (including Rank 0)|
+:free local_grad, global_grad;
+:mlp_free(net);
+:free datasets;
+:MPI_Finalize();
+
+stop
+
+@enduml

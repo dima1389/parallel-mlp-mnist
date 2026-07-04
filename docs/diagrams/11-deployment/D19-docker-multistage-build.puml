@@ -1,0 +1,59 @@
+@startuml D19-Docker-Multistage-Build
+title D19 — Docker Multi-Stage Build\n(Dockerfile)
+
+skinparam defaultFontSize 11
+skinparam rectangle {
+    BackgroundColor<<stage1>> #DAE8FC
+    BorderColor<<stage1>> #6C8EBF
+    BackgroundColor<<stage2>> #D5E8D4
+    BorderColor<<stage2>> #82B366
+    BackgroundColor<<artifact>> #FFF2CC
+    BorderColor<<artifact>> #D6B656
+}
+
+rectangle "FROM ubuntu:22.04 AS builder\nStage 1 — Compiler + Build" <<stage1>> {
+    rectangle "apt-get install:\ng++, make,\nlibopenmpi-dev,\nopenmpi-bin" as PKG1 <<stage1>>
+    rectangle "COPY\nMakefile, include/,\nsrc/, tests/" as COPY1 <<stage1>>
+    rectangle "RUN make all\n→ build/train_seq\n   build/train_omp\n   build/train_mpi" as BUILD <<stage1>>
+    rectangle "RUN make test || true\n(test binaries built;\nnot run — MNIST missing)" as TEST1 <<stage1>>
+}
+
+rectangle "FROM ubuntu:22.04 AS runtime\nStage 2 — Slim Runtime Image" <<stage2>> {
+    rectangle "apt-get install:\nopenmpi-bin, libgomp1,\npython3, pip, curl,\ngzip, bash" as PKG2 <<stage2>>
+    rectangle "pip install matplotlib" as PIP <<stage2>>
+    rectangle "useradd appuser\n(MPI refuses root)" as USER <<stage2>>
+    rectangle "COPY --from=builder\nbuild/train_seq\nbuild/train_omp\nbuild/train_mpi" as COPY2 <<stage2>>
+    rectangle "COPY\nscripts/, configs/, data/" as COPY3 <<stage2>>
+    rectangle "mkdir results/{logs,tables,plots}\nchown appuser" as MKDIR <<stage2>>
+}
+
+rectangle "Runtime Filesystem\n/app/" <<artifact>> {
+    rectangle "build/train_seq\nbuild/train_omp\nbuild/train_mpi" as BINS <<artifact>>
+    rectangle "scripts/\nconfigs/" as STATIC <<artifact>>
+    rectangle "data/mnist/raw/\n(via volume mount)" as DATA <<artifact>>
+    rectangle "results/\n(via volume mount)" as RESULTS <<artifact>>
+}
+
+PKG1 -down-> COPY1
+COPY1 -down-> BUILD
+BUILD -down-> TEST1
+
+BUILD -right-> COPY2 : "COPY --from=builder"
+PKG2 -down-> PIP
+PIP -down-> USER
+USER -down-> COPY2
+COPY2 -down-> COPY3
+COPY3 -down-> MKDIR
+
+MKDIR -right-> BINS
+COPY2 -right-> BINS
+COPY3 -right-> STATIC
+
+note bottom of DATA
+  Volume mounts specified in docker-compose.yml:
+  - mnist-data:/app/data/mnist/raw  (named volume)
+  - ./results:/app/results           (bind mount)
+  - ./configs:/app/configs           (bind mount)
+end note
+
+@enduml

@@ -1,0 +1,55 @@
+@startuml D10-Backward-Pass
+title D10 — MLP Backward Pass Sequence\n(Backpropagation, Single Sample)
+
+skinparam defaultFontSize 11
+skinparam sequenceMessageAlign center
+
+participant "Caller\n(train loop)" as CALLER
+participant "mlp_backward\n(net, input, label)" as BWD
+participant "Output Layer\n(N-1)" as OLAYER
+participant "cross_entropy_\nsoftmax_gradient()" as CEG
+participant "Hidden Layer i\n(i = N-2 .. 0)" as HLAYER
+participant "relu_derivative()" as RELUD
+
+CALLER -> BWD : "input[784], label (uint8)"
+activate BWD
+
+note over BWD
+  Must be called AFTER mlp_forward()
+  so z[] and a[] buffers are populated.
+end note
+
+' Step 1: output delta
+BWD -> OLAYER : "compute output delta"
+activate OLAYER
+OLAYER -> CEG : "cross_entropy_softmax_gradient\n(a[], label, delta[], num_classes)"
+CEG --> OLAYER : "delta[j] = a[j] - (j==label ? 1 : 0)\n(softmax+cross-entropy gradient shortcut)"
+deactivate OLAYER
+
+' Step 2: propagate error backward
+loop "for i = N-2 downto 0"
+    BWD -> HLAYER : "propagate error signal"
+    activate HLAYER
+    HLAYER -> RELUD : "relu_derivative(z[], relu_d[], size)"
+    RELUD --> HLAYER : "relu_d[j] = (z[j] > 0) ? 1.0 : 0.0"
+    HLAYER -> HLAYER : "delta[j] = relu_d[j] × Σ_k W_next[j*os+k] × delta_next[k]"
+    deactivate HLAYER
+end
+
+' Step 3: accumulate gradients
+loop "for i = 0..N-1"
+    BWD -> BWD : "dW[k*os+j] += prev_a[k] × delta[j]\ndb[j]       += delta[j]"
+end
+
+BWD --> CALLER : "(gradients accumulated in dW[], db[])"
+deactivate BWD
+
+note over BWD
+  Gradients are *accumulated* (+=) so one
+  mlp_zero_gradients() call before the batch,
+  and N mlp_backward() calls within the batch,
+  correctly sum gradients across all samples
+  before the SGD update.
+end note
+
+@enduml

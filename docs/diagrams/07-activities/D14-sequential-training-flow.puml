@@ -1,0 +1,68 @@
+@startuml D14-Sequential-Training-Flow
+title D14 — Sequential Training Activity Flow
+
+skinparam defaultFontSize 11
+skinparam activityBackgroundColor #DAE8FC
+skinparam activityBorderColor #6C8EBF
+
+start
+
+:Parse CLI args\n(--config, --data, --log, --epoch-csv);
+:load_config(config_path)\n→ Config{hidden_layers, epochs, lr, batch_size};
+:open_log(log_path) [optional];
+
+:load_mnist_images(train) → train_images;
+:load_mnist_labels(train) → train_labels;
+:load_mnist_images(test)  → test_images;
+:load_mnist_labels(test)  → test_labels;
+
+:Build layer_sizes\n[784, hidden1, …, hiddenN, 10];
+:mlp_create(layer_sizes)\n→ MLP with He-init weights;
+
+:alloc test_preds[test_N × 10];
+:timer_start(total_timer);
+
+repeat
+    :shuffle indices[0..N-1] (RNG seed=42);
+    :timer_start(epoch_timer);
+    :epoch_loss = 0;
+
+    repeat
+        :mlp_zero_gradients(net);
+
+        repeat
+            :forward: mlp_forward(net, img[idx]);
+            :accumulate: epoch_loss += cross_entropy_loss();
+            :backward: mlp_backward(net, img, label);
+        repeat while (more samples in batch?) is (yes)
+        ->no;
+
+        :scale dW/db by 1/actual_batch;
+        :mlp_update(net, lr);
+    repeat while (more batches?) is (yes)
+    ->no;
+
+    :timer_stop(epoch_timer);
+    :epoch_loss /= N;
+
+    :evaluate test set:\nmlp_forward() for each test sample;
+    :compute_accuracy(test_preds, test_labels, …);
+    :log_printf("Epoch … Loss … Accuracy … Time …");
+    :push EpochRecord;
+
+repeat while (epoch < E?) is (yes)
+->no;
+
+:timer_stop(total_timer);
+
+if (epoch_csv_path set?) then (yes)
+    :write_epoch_csv(path, epoch_records);
+endif
+
+:print_training_summary(…);
+:close_log();
+:free all memory\n(test_preds, net, datasets);
+
+stop
+
+@enduml

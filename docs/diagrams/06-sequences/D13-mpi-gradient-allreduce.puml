@@ -1,0 +1,64 @@
+@startuml D13-MPI-Gradient-Allreduce
+title D13 — MPI Gradient Synchronisation\nPer Mini-Batch (R ranks)
+
+skinparam defaultFontSize 10
+skinparam sequenceMessageAlign center
+
+participant "Rank 0\n(master reporter)" as R0
+participant "Rank 1" as R1
+participant "Rank R-1" as RN
+participant "MPI Runtime\n(MPI_COMM_WORLD)" as MPI_RT
+
+note over R0, RN
+  All ranks hold identical model weights
+  (same He-init seed=42) and use the same
+  deterministic shuffle (seed=42).
+  Each rank processes a disjoint shard of
+  the mini-batch: shard_size ≈ batch_size / R.
+end note
+
+== Per mini-batch ==
+
+R0 -> R0 : "mlp_zero_gradients()\nforward+backward\non local shard\naccumulate into dW/db"
+R1 -> R1 : "mlp_zero_gradients()\nforward+backward\non local shard\naccumulate into dW/db"
+RN -> RN : "mlp_zero_gradients()\nforward+backward\non local shard\naccumulate into dW/db"
+
+note over R0, RN
+  Each rank packs its dW/db into
+  a flat local_grad[] buffer.
+end note
+
+R0 -> MPI_RT : "MPI_Allreduce(local_grad, global_grad,\ntotal_params, MPI_SUM)"
+R1 -> MPI_RT : "MPI_Allreduce(local_grad, global_grad,\ntotal_params, MPI_SUM)"
+RN -> MPI_RT : "MPI_Allreduce(local_grad, global_grad,\ntotal_params, MPI_SUM)"
+
+MPI_RT --> R0 : "global_grad[] = Σ all ranks"
+MPI_RT --> R1 : "global_grad[] = Σ all ranks"
+MPI_RT --> RN : "global_grad[] = Σ all ranks"
+
+R0 -> R0 : "unpack global_grad into dW/db\nscale by 1/actual_batch\nmlp_update(net, lr)"
+R1 -> R1 : "unpack global_grad into dW/db\nscale by 1/actual_batch\nmlp_update(net, lr)"
+RN -> RN : "unpack global_grad into dW/db\nscale by 1/actual_batch\nmlp_update(net, lr)"
+
+note over R0, RN
+  All ranks now have identical updated weights.
+  One Allreduce per mini-batch is the
+  communication bottleneck.
+end note
+
+== End of epoch ==
+
+R0 -> MPI_RT : "MPI_Reduce(local_loss → global_loss,\nMPI_SUM, root=0)"
+R1 -> MPI_RT : "MPI_Reduce(local_loss, …)"
+RN -> MPI_RT : "MPI_Reduce(local_loss, …)"
+MPI_RT --> R0 : "global_loss = Σ all ranks"
+
+R0 -> R0 : "global_loss /= N\ntest evaluation on test set\nlog epoch summary\nstore EpochRecord"
+
+note over R1, RN
+  Non-zero ranks do NOT evaluate
+  the test set or write logs.
+  Only rank 0 reports results.
+end note
+
+@enduml

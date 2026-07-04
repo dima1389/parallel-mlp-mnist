@@ -1,0 +1,78 @@
+@startuml D15-OpenMP-Training-Flow
+title D15 — OpenMP Training Activity Flow\n(Swimlane: Main Thread vs Worker Threads)
+
+skinparam defaultFontSize 10
+
+|Main Thread|
+start
+:omp_set_num_threads(T);
+:load_config, open_log;
+:load MNIST (train + test);
+:mlp_create(master net);
+:alloc test_preds;
+
+:Create T thread-local nets;
+note right
+  Each thread net shares
+  master's weights/biases
+  (read-only pointers).
+  Private: z, a, delta,
+  relu_d, dW, db buffers.
+end note
+
+:timer_start(total_timer);
+
+repeat
+  :shuffle indices (seed=42);
+  :timer_start(epoch_timer);
+  :epoch_loss = 0.0;
+
+  repeat
+    :zero gradient on each thread net;
+
+    |Worker Threads (OpenMP parallel for)|
+    :Each thread gets a chunk of\nbatch_start..batch_end;
+    :mlp_forward(local_net, img);
+    :cross_entropy_loss() → local loss;
+    :mlp_backward(local_net, img, label);
+    :OMP reduction: batch_loss += local_loss;
+
+    |Main Thread|
+    :mlp_zero_gradients(master_net);
+
+    repeat
+      :mlp_accumulate_gradients(master_net,\nthread_nets[t]);
+    repeat while (t < T?) is (yes)
+    ->no;
+
+    :scale master dW/db by 1/actual_batch;
+    :mlp_update(master_net, lr);
+
+  repeat while (more batches?) is (yes)
+  ->no;
+
+  :timer_stop(epoch_timer);
+  :epoch_loss /= N;
+
+  |Worker Threads (OpenMP parallel for)|
+  :mlp_forward(local_net, test_img[s])\nwrite to test_preds[s];
+
+  |Main Thread|
+  :compute_accuracy(test_preds, test_labels, …);
+  :log_printf("Epoch … Loss … Accuracy … Time …");
+  :push EpochRecord;
+
+repeat while (epoch < E?) is (yes)
+->no;
+
+|Main Thread|
+:timer_stop(total_timer);
+:write CSV, print SUMMARY;
+:close_log;
+:null shared weight/bias ptrs in thread nets;
+:mlp_free all thread nets;
+:free master net + datasets;
+
+stop
+
+@enduml

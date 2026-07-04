@@ -1,0 +1,84 @@
+@startuml D22-Build-Targets
+title D22 — Makefile Build Targets and Dependencies
+
+skinparam defaultFontSize 11
+skinparam rectangle {
+    BackgroundColor<<goal>> #DAE8FC
+    BorderColor<<goal>> #6C8EBF
+    BackgroundColor<<obj>> #D5E8D4
+    BorderColor<<obj>> #82B366
+    BackgroundColor<<src>> #FFF2CC
+    BorderColor<<src>> #D6B656
+    BackgroundColor<<bin>> #F8CECC
+    BorderColor<<bin>> #B85450
+}
+
+rectangle "make all" <<goal>>
+rectangle "make seq" <<goal>>
+rectangle "make omp" <<goal>>
+rectangle "make mpi" <<goal>>
+rectangle "make test" <<goal>>
+rectangle "make debug" <<goal>>
+rectangle "make clean" <<goal>>
+
+rectangle "build/train_seq" <<bin>>
+rectangle "build/train_omp" <<bin>>
+rectangle "build/train_mpi" <<bin>>
+rectangle "build/train_seq_dbg" <<bin>>
+rectangle "build/train_omp_dbg" <<bin>>
+rectangle "build/train_mpi_dbg" <<bin>>
+rectangle "build/test_*" <<bin>>
+
+rectangle "Common Objects (seq)\nbuild/*.o\n(CXX -O2)" <<obj>>
+rectangle "Common Objects (omp)\nbuild/*_omp.o\n(CXX -fopenmp -O2)" <<obj>>
+rectangle "Common Objects (mpi)\nbuild/*_mpi.o\n(MPICXX -O2)" <<obj>>
+rectangle "Test Objects\nbuild/test_*.o\n(links common seq objs)" <<obj>>
+rectangle "Debug Objects\nbuild/*_dbg.o\n(CXX -g -O0)" <<obj>>
+
+rectangle "Common Sources\nsrc/utils.cpp\nsrc/dataset.cpp\nsrc/activations.cpp\nsrc/loss.cpp\nsrc/optimizer.cpp\nsrc/mlp.cpp\nsrc/metrics.cpp\nsrc/timer.cpp" <<src>>
+
+rectangle "Entry Points\nsrc/train_sequential.cpp\nsrc/train_openmp.cpp\nsrc/train_mpi.cpp" <<src>>
+
+rectangle "Test Sources\ntests/test_*.cpp" <<src>>
+
+"make all" --> "make seq"
+"make all" --> "make omp"
+"make all" --> "make mpi"
+"make debug" --> "build/train_seq_dbg"
+"make debug" --> "build/train_omp_dbg"
+"make debug" --> "build/train_mpi_dbg"
+
+"make seq" --> "build/train_seq"
+"make omp" --> "build/train_omp"
+"make mpi" --> "build/train_mpi"
+"make test" --> "build/test_*"
+
+"build/train_seq" --> "Common Objects (seq)"
+"build/train_seq" --> "src/train_sequential.cpp"
+"build/train_omp" --> "Common Objects (omp)"
+"build/train_omp" --> "src/train_openmp.cpp"
+"build/train_mpi" --> "Common Objects (mpi)"
+"build/train_mpi" --> "src/train_mpi.cpp"
+
+"build/test_*" --> "Common Objects (seq)"
+"build/test_*" --> "Test Sources"
+
+"Common Objects (seq)" --> "Common Sources"
+"Common Objects (omp)" --> "Common Sources"
+"Common Objects (mpi)" --> "Common Sources"
+
+"build/train_seq_dbg" --> "Debug Objects"
+"Debug Objects" --> "Common Sources"
+
+note bottom of "Common Sources"
+  Compiler flags:
+  seq:   g++ -std=c++17 -O2 -Wall -Wextra
+  omp:   g++ -std=c++17 -O2 -fopenmp
+  mpi:   mpicxx -std=c++17 -O2
+  debug: g++ -std=c++17 -g -O0
+  
+  Auto-generated .d dependency files
+  included for header change detection.
+end note
+
+@enduml

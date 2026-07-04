@@ -1,0 +1,47 @@
+@startuml D07-Layer-Memory-Model
+title D07 — Layer Memory Layout\n(Per Layer, Row-Major Weights)
+
+skinparam defaultFontSize 11
+
+rectangle "Layer i (example: 784 → 256)" {
+
+    rectangle "weights[]\n[input_size × output_size]\n= 784 × 256 = 200,704 doubles\n(row-major: W[k*256+j])" as W #DAE8FC
+    rectangle "biases[]\n[output_size]\n= 256 doubles" as B #D5E8D4
+
+    rectangle "--- Forward pass buffers ---" as FWD #FFFFCC {
+        rectangle "z[]\npre-activation\n[output_size = 256]" as Z #FFF2CC
+        rectangle "a[]\npost-activation (ReLU/Softmax)\n[output_size = 256]" as A #FFF2CC
+    }
+
+    rectangle "--- Backward pass buffers ---" as BWD #FFE6CC {
+        rectangle "dW[]\nweight gradients\n[input_size × output_size]\n= 200,704 doubles" as DW #FFE6CC
+        rectangle "db[]\nbias gradients\n[output_size = 256]" as DB #FFE6CC
+        rectangle "delta[]\nerror signal\n[output_size = 256]" as DELTA #FFE6CC
+        rectangle "relu_d[]\nReLU derivative cache\n[output_size = 256]" as RELUD #FFE6CC
+    }
+}
+
+W -right-> Z : "z[j] = Σ_k W[k*os+j]\n      × prev_a[k] + b[j]"
+B -right-> Z
+Z -down-> A  : "ReLU(z) or\nSoftmax(z)"
+A -right-> DW : "dW[k*os+j] +=\nprev_a[k] × delta[j]"
+DELTA -left-> DW
+RELUD -left-> DELTA : "gate delta by\nReLU derivative"
+
+note bottom of W
+  In OpenMP mode, thread-local networks
+  point their weights/biases to the master's
+  allocations (shared read-only).
+  Thread-local dW/db/z/a/delta/relu_d
+  are independent per-thread allocations.
+end note
+
+note bottom of DW
+  Gradient accumulation pattern:
+  mlp_zero_gradients() → zeros dW/db
+  mlp_backward()       → accumulates
+  mlp_update()         → applies SGD:
+    W[i] -= lr × dW[i]
+end note
+
+@enduml
